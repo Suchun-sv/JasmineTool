@@ -592,9 +592,11 @@ GPU_IDS="{gpu_config}"
 echo "Using configured GPUs: $GPU_IDS"
 """
     
-    # Combine all setup commands into a single script
+    # Combine all setup commands into a single script with proper environment
     setup_script = f"""
 set -e
+export TERM=xterm-256color FORCE_COLOR=1
+
 SWEEP_ID_SHORT=$(echo "{sweep_id}" | rev | cut -d"/" -f1 | rev)
 CURRENT_TIME=$(date +"%m%d%H%M")
 SESSION_NAME="${{SWEEP_ID_SHORT}}_${{CURRENT_TIME}}"
@@ -633,7 +635,7 @@ echo "   View session: tmux attach-session -t $SESSION_NAME"
 echo "   Kill session: tmux kill-session -t $SESSION_NAME"
 """
     
-    result = remote_executor.ssh.execute_command(setup_script, stream_output=True)
+    result = remote_executor.ssh.execute_command(setup_script, stream_output=True, force_pty=True)
     if result.returncode != 0:
         print("✗ Failed to create tmux session and setup processes")
         return False

@@ -508,20 +508,20 @@ def sync_git_branch_remote(remote_executor: RemoteTargetExecutor, work_dir: str,
     
     # Fetch all branches
     print("📥 Fetching latest changes from remote...")
-    result = remote_executor.ssh.execute_command("git fetch --all", stream_output=True)
+    result = remote_executor.ssh.execute_command("git fetch --all", stream_output=True, force_pty=True)
     if result.returncode != 0:
         print(f"✗ Failed to fetch from remote")
         return False
     
     # Checkout and sync the branch
     print(f"🔄 Checking out branch: {current_branch}")
-    result = remote_executor.ssh.execute_command(f"git checkout {current_branch}", stream_output=True)
+    result = remote_executor.ssh.execute_command(f"git checkout {current_branch}", stream_output=True, force_pty=True)
     if result.returncode != 0:
         print(f"✗ Failed to checkout branch: {current_branch}")
         return False
     
     print(f"🔄 Pulling latest changes...")
-    result = remote_executor.ssh.execute_command(f"git reset --hard origin/{current_branch}", stream_output=True)
+    result = remote_executor.ssh.execute_command(f"git reset --hard origin/{current_branch}", stream_output=True, force_pty=True)
     if result.returncode != 0:
         print(f"✗ Failed to reset to origin/{current_branch}")
         return False
@@ -545,7 +545,11 @@ def setup_dvc_cache_remote(remote_executor: RemoteTargetExecutor, work_dir: str,
     if command_runner.startswith("uv run"):
         command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
     
-    result = remote_executor.ssh.execute_command(f'{command_runner} dvc cache dir --local "{dvc_cache}"', stream_output=True)
+    # Set environment variables for better output display
+    env_setup = "export TERM=xterm-256color FORCE_COLOR=1 &&"
+    full_command = f'{env_setup} {command_runner} dvc cache dir --local "{dvc_cache}"'
+    
+    result = remote_executor.ssh.execute_command(full_command, stream_output=True, force_pty=True)
     
     if result.returncode == 0:
         print("✅ DVC cache directory set successfully")
@@ -570,7 +574,11 @@ def setup_dvc_remote_remote(remote_executor: RemoteTargetExecutor, work_dir: str
     if command_runner.startswith("uv run"):
         command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
     
-    result = remote_executor.ssh.execute_command(f'{command_runner} dvc remote add --local jasmine_remote "{dvc_remote}" --force', stream_output=True)
+    # Set environment variables for better output display
+    env_setup = "export TERM=xterm-256color FORCE_COLOR=1 &&"
+    full_command = f'{env_setup} {command_runner} dvc remote add --local jasmine_remote "{dvc_remote}" --force'
+    
+    result = remote_executor.ssh.execute_command(full_command, stream_output=True, force_pty=True)
     
     if result.returncode == 0:
         print("✅ DVC remote 'jasmine_remote' added successfully")
@@ -600,7 +608,11 @@ def dvc_pull_remote(remote_executor: RemoteTargetExecutor, work_dir: str, dvc_re
     if command_runner.startswith("uv run"):
         command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
     
-    result = remote_executor.ssh.execute_command(f'{command_runner} dvc pull -r jasmine_remote --force', stream_output=True)
+    # Set environment variables for better progress bar display
+    env_setup = "export TERM=xterm-256color FORCE_COLOR=1 DVC_PROGRESS_BAR_TIMEOUT=10 &&"
+    full_command = f"{env_setup} {command_runner} dvc pull -r jasmine_remote --force"
+    
+    result = remote_executor.ssh.execute_command(full_command, stream_output=True, force_pty=True)
     
     if result.returncode == 0:
         print("✅ DVC data pulled successfully")

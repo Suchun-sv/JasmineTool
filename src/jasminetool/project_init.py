@@ -332,7 +332,8 @@ def check_and_install_x_cmd_remote(remote_executor: RemoteTargetExecutor, verbos
         result = remote_executor.ssh.execute_command(
             'eval "$(curl https://get.x-cmd.com)"', 
             no_work_dir=True,
-            stream_output=True
+            stream_output=True,
+            force_pty=True
         )
         
         if result.returncode == 0:
@@ -361,7 +362,8 @@ def check_and_install_uv_remote(remote_executor: RemoteTargetExecutor, verbose: 
         result = remote_executor.ssh.execute_command(
             "curl -LsSf https://astral.sh/uv/install.sh | sh",
             no_work_dir=True,
-            stream_output=True
+            stream_output=True,
+            force_pty=True
         )
         
         if result.returncode == 0:
@@ -413,7 +415,8 @@ def clone_repository_remote(remote_executor: RemoteTargetExecutor, github_url: s
         result = remote_executor.ssh.execute_command(
             f'git clone "{github_url}" "{work_dir}"',
             no_work_dir=True,
-            stream_output=True
+            stream_output=True,
+            force_pty=True
         )
         
         if result.returncode == 0:
@@ -461,9 +464,10 @@ def setup_environment_remote(remote_executor: RemoteTargetExecutor, work_dir: st
     if result.returncode == 0:
         print("📜 Found init.sh, running custom initialization script...")
         
-        # Run init.sh with proper PATH setup
-        init_cmd = f"export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$PATH\" && bash init.sh"
-        result = remote_executor.ssh.execute_command(init_cmd, stream_output=True)
+        # Run init.sh with proper PATH setup and environment variables
+        env_setup = "export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$PATH\" TERM=xterm-256color FORCE_COLOR=1 &&"
+        init_cmd = f"{env_setup} bash init.sh"
+        result = remote_executor.ssh.execute_command(init_cmd, stream_output=True, force_pty=True)
         
         if result.returncode == 0:
             print("✓ Custom initialization script completed successfully")
@@ -476,31 +480,24 @@ def setup_environment_remote(remote_executor: RemoteTargetExecutor, work_dir: st
             print("   Note: Make sure uv commands in init.sh use full path or update PATH")
             return False
     else:
-        print("🐍 Running default Python environment setup...")
+        print("📜 No init.sh found, setting up standard environment...")
         
-        # Create virtual environment
-        print("Creating virtual environment...")
-        result = remote_executor.ssh.execute_command(f"{uv_cmd} venv", stream_output=True)
+        # Standard setup commands
+        setup_commands = [
+            f"export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$PATH\" TERM=xterm-256color FORCE_COLOR=1",
+            f"{uv_cmd} venv --python=3.10",
+            f"{uv_cmd} sync"
+        ]
         
-        if result.returncode != 0:
-            print(f"✗ Failed to create virtual environment (exit code: {result.returncode})")
-            if result.stdout and verbose:
-                print(f"   Output: {result.stdout}")
-            print("   Please ensure uv is properly installed and accessible")
-            return False
+        for cmd in setup_commands:
+            print(f"🔧 Running: {cmd}")
+            result = remote_executor.ssh.execute_command(cmd, stream_output=True, force_pty=True)
+            
+            if result.returncode != 0:
+                print(f"✗ Command failed: {cmd}")
+                return False
         
-        # Sync dependencies
-        print("Syncing dependencies...")
-        result = remote_executor.ssh.execute_command(f"{uv_cmd} sync", stream_output=True)
-        
-        if result.returncode != 0:
-            print(f"✗ Failed to sync dependencies (exit code: {result.returncode})")
-            if result.stdout and verbose:
-                print(f"   Output: {result.stdout}")
-            print("   Please check pyproject.toml or requirements.txt file")
-            return False
-        
-        print("✓ Python environment setup completed successfully")
+        print("✓ Standard environment setup completed successfully")
         return True
 
 

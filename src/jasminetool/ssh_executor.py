@@ -44,16 +44,22 @@ class SSHExecutor:
             print(f"❌ Error testing SSH connection: {e}")
             return False
     
-    def execute_command(self, command: str, capture_output: bool = True, no_work_dir: bool = False, stream_output: bool = False) -> subprocess.CompletedProcess:
+    def execute_command(self, command: str, capture_output: bool = True, no_work_dir: bool = False, stream_output: bool = False, force_pty: bool = False) -> subprocess.CompletedProcess:
         """Execute a single command on the remote host"""
         # Escape single quotes in command to prevent shell injection
         escaped_command = command.replace("'", "'\"'\"'")
         
         # Build the SSH command
+        ssh_base = f"ssh -p {self.ssh_port}"
+        
+        # Add PTY allocation for interactive/streaming commands
+        if stream_output or force_pty:
+            ssh_base += " -t"
+        
         if no_work_dir:
-            ssh_cmd = f"ssh -p {self.ssh_port} {self.ssh_host} '{escaped_command}'"
+            ssh_cmd = f"{ssh_base} {self.ssh_host} '{escaped_command}'"
         else:
-            ssh_cmd = f"ssh -p {self.ssh_port} {self.ssh_host} 'cd {self.work_dir} && {escaped_command}'"
+            ssh_cmd = f"{ssh_base} {self.ssh_host} 'cd {self.work_dir} && {escaped_command}'"
         
         if self.verbose:
             print(f"🔧 Executing on {self.ssh_host}: {command}")
@@ -84,13 +90,14 @@ class SSHExecutor:
             ssh_cmd,
             shell=True,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Combine stderr with stdout for simpler handling
+            stderr=subprocess.PIPE,  # Keep stderr separate to handle progress bars
             text=True,
-            bufsize=1,  # Line buffered
+            bufsize=0,  # Unbuffered for real-time output
             universal_newlines=True
         )
         
         output_lines = []
+        error_lines = []
         
         # Read output in real-time
         try:
@@ -99,12 +106,36 @@ class SSHExecutor:
                 if process.poll() is not None:
                     break
                 
-                # Read available output
-                if process.stdout:
-                    line = process.stdout.readline()
-                    if line:
-                        print(line, end='', flush=True)
-                        output_lines.append(line)
+                # Use select to check for available input (Unix only)
+                try:
+                    import select
+                    ready, _, _ = select.select([process.stdout, process.stderr], [], [], 0.1)
+                    
+                    for stream in ready:
+                        if stream is process.stdout:
+                            line = stream.readline()
+                            if line:
+                                print(line, end='', flush=True)
+                                output_lines.append(line)
+                        elif stream is process.stderr:
+                            line = stream.readline()
+                            if line:
+                                # Print stderr in real-time (this includes progress bars)
+                                print(line, end='', flush=True)
+                                error_lines.append(line)
+                except (ImportError, OSError):
+                    # Fallback for Windows or when select is not available
+                    if process.stdout:
+                        line = process.stdout.readline()
+                        if line:
+                            print(line, end='', flush=True)
+                            output_lines.append(line)
+                    if process.stderr:
+                        line = process.stderr.readline()
+                        if line:
+                            print(line, end='', flush=True)
+                            error_lines.append(line)
+                            
         except KeyboardInterrupt:
             print("\n⚠️  Command interrupted by user")
             process.terminate()
@@ -120,10 +151,15 @@ class SSHExecutor:
             )
         
         # Read any remaining output
-        remaining_output = process.stdout.read() if process.stdout else ""
-        if remaining_output:
-            print(remaining_output, end='', flush=True)
-            output_lines.append(remaining_output)
+        remaining_stdout = process.stdout.read() if process.stdout else ""
+        remaining_stderr = process.stderr.read() if process.stderr else ""
+        
+        if remaining_stdout:
+            print(remaining_stdout, end='', flush=True)
+            output_lines.append(remaining_stdout)
+        if remaining_stderr:
+            print(remaining_stderr, end='', flush=True)
+            error_lines.append(remaining_stderr)
         
         # Wait for process to complete
         return_code = process.wait()
@@ -136,7 +172,7 @@ class SSHExecutor:
             args=ssh_cmd,
             returncode=return_code,
             stdout=''.join(output_lines),
-            stderr=""  # Since we combined stderr with stdout
+            stderr=''.join(error_lines)
         )
     
     def execute_commands(self, commands: List[str], capture_output: bool = True) -> subprocess.CompletedProcess:
