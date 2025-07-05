@@ -70,14 +70,25 @@ class TmuxManager:
                 result = subprocess.run(['nvidia-smi', '--query-gpu=count', '--format=csv,noheader'], 
                                       capture_output=True, text=True)
                 if result.returncode == 0:
-                    num_gpus = len(result.stdout.strip().split('\n'))
-                    return [str(i) for i in range(num_gpus)]
-            except:
-                pass
-            return ["0"]
+                    gpu_count_output = result.stdout.strip()
+                    if gpu_count_output:
+                        num_gpus = len(gpu_count_output.split('\n'))
+                        if num_gpus > 0:
+                            print(f"🖥️  Detected {num_gpus} GPU(s)")
+                            return [str(i) for i in range(num_gpus)]
+                print("⚠️  nvidia-smi failed or no GPUs detected, using default GPU 0")
+                return ["0"]
+            except FileNotFoundError:
+                print("⚠️  nvidia-smi not found (no GPU or driver not installed), using CPU-only mode")
+                return ["0"]
+            except Exception as e:
+                print(f"⚠️  Failed to get GPU count: {e}, using default GPU 0")
+                return ["0"]
         
         # Parse comma-separated GPU IDs
-        return [gpu.strip() for gpu in gpu_config.split(',')]
+        gpu_list = [gpu.strip() for gpu in gpu_config.split(',')]
+        print(f"🖥️  Using configured GPUs: {gpu_list}")
+        return gpu_list
     
     @staticmethod
     def create_tmux_session(gpu_config: str, num_processes: int, command: str, 
@@ -91,6 +102,18 @@ class TmuxManager:
         print(f"Extracted sweep_id: {sweep_id}")
         
         gpu_ids = TmuxManager.expand_gpu_config(gpu_config)
+        
+        # Check if nvidia-smi is available
+        has_nvidia_smi = False
+        if not remote:  # Only check locally
+            try:
+                result = subprocess.run(['nvidia-smi', '--version'], capture_output=True)
+                has_nvidia_smi = (result.returncode == 0)
+            except FileNotFoundError:
+                has_nvidia_smi = False
+        else:
+            # For remote, assume we'll check in the script
+            has_nvidia_smi = True
         
         # Create new tmux session
         tmux_commands = []
@@ -106,14 +129,19 @@ class TmuxManager:
                 # Build the full command
                 env_setup = "source ~/.bashrc && conda activate vector && export WANDB_API_KEY=c1452b5bae77778a04b9cad2a8d96d4424088383"
                 
-                if gpu_id:
+                # Only set CUDA_VISIBLE_DEVICES if we have GPU support and a valid GPU ID
+                if has_nvidia_smi and gpu_id and gpu_id != "":
                     cuda_env = f"CUDA_VISIBLE_DEVICES={gpu_id}"
                     full_command = f"{env_setup} && {cuda_env} {command}"
+                    print(f"Started process {i} on GPU {gpu_id} in tmux session {session_name}")
                 else:
                     full_command = f"{env_setup} && {command}"
+                    if has_nvidia_smi:
+                        print(f"Started process {i} (CPU mode) in tmux session {session_name}")
+                    else:
+                        print(f"Started process {i} (no GPU detected) in tmux session {session_name}")
                 
                 tmux_commands.append(f'tmux send-keys -t "{session_name}" "{full_command}" C-m')
-                print(f"Started process {i} on GPU {gpu_id} in tmux session {session_name}")
                 
                 first_pane = False
         

@@ -376,15 +376,24 @@ class StartManager:
                 )
                 if result.returncode == 0:
                     num_gpus = int(result.stdout.strip())
-                    gpu_ids = list(range(num_gpus))
+                    if num_gpus > 0:
+                        gpu_ids = list(range(num_gpus))
+                        print(f"🖥️  Detected {num_gpus} GPU(s): {gpu_ids}")
+                    else:
+                        gpu_ids = [0]
+                        print("⚠️  No GPUs detected, using default GPU 0")
                 else:
-                    print("❌ Failed to get GPU count, using GPU 0")
                     gpu_ids = [0]
+                    print("⚠️  nvidia-smi failed, using default GPU 0")
+            except FileNotFoundError:
+                gpu_ids = [0]
+                print("⚠️  nvidia-smi not found (no GPU or driver not installed), using CPU-only mode")
             except Exception as e:
-                print(f"❌ Failed to get GPU count: {e}, using GPU 0")
+                print(f"⚠️  Failed to get GPU count: {e}, using default GPU 0")
                 gpu_ids = [0]
         else:
             gpu_ids = [int(x.strip()) for x in gpu_config.split(",")]
+            print(f"🖥️  Using configured GPUs: {gpu_ids}")
         
         # Get command runner
         command_runner = self.target_config.get("command_runner", "uv run")
@@ -412,6 +421,14 @@ class StartManager:
         
         first_pane = True
         
+        # Check if nvidia-smi exists locally
+        has_nvidia_smi = False
+        try:
+            result = subprocess.run(["nvidia-smi", "--version"], capture_output=True)
+            has_nvidia_smi = (result.returncode == 0)
+        except FileNotFoundError:
+            has_nvidia_smi = False
+        
         # Create panes and start processes
         for gpu_id in gpu_ids:
             for i in range(num_processes):
@@ -426,14 +443,22 @@ class StartManager:
                 
                 # Build command to run in pane
                 wandb_cmd = f"wandb agent {sweep_id}"  # Use full sweep_id for the command
-                full_command = f"export WANDB_API_KEY={wandb_key} && CUDA_VISIBLE_DEVICES={gpu_id} {command_runner} {wandb_cmd}"
+                
+                # Only set CUDA_VISIBLE_DEVICES if nvidia-smi exists
+                if has_nvidia_smi:
+                    full_command = f"export WANDB_API_KEY={wandb_key} && CUDA_VISIBLE_DEVICES={gpu_id} {command_runner} {wandb_cmd}"
+                else:
+                    full_command = f"export WANDB_API_KEY={wandb_key} && {command_runner} {wandb_cmd}"
                 
                 # Send command to pane
                 send_cmd = ["tmux", "send-keys", "-t", session_name, full_command, "C-m"]
                 subprocess.run(send_cmd)
                 
                 if self.verbose:
-                    print(f"   ✅ Started process {i+1} on GPU {gpu_id}")
+                    if has_nvidia_smi:
+                        print(f"   ✅ Started process {i+1} on GPU {gpu_id}")
+                    else:
+                        print(f"   ✅ Started process {i+1} (CPU-only mode)")
                 
                 first_pane = False
         
@@ -582,14 +607,25 @@ def create_tmux_session_remote(remote_executor: RemoteTargetExecutor, sweep_id: 
     
     if gpu_config == "0":
         gpu_setup = """
-GPU_COUNT=$(nvidia-smi --query-gpu=count --format=csv,noheader | wc -l)
-GPU_IDS=$(seq 0 $((GPU_COUNT-1)) | tr "\\n" "," | sed "s/,$//")"
-echo "Detected GPUs: $GPU_IDS"
+# Check if nvidia-smi exists
+if command -v nvidia-smi >/dev/null 2>&1; then
+    GPU_COUNT=$(nvidia-smi --query-gpu=count --format=csv,noheader | wc -l)
+    if [ $? -eq 0 ] && [ "$GPU_COUNT" -gt 0 ]; then
+        GPU_IDS=$(seq 0 $((GPU_COUNT-1)) | tr "\\n" "," | sed "s/,$//")"
+        echo "🖥️  Detected GPUs: $GPU_IDS"
+    else
+        GPU_IDS="0"
+        echo "⚠️  nvidia-smi failed, using default GPU: $GPU_IDS"
+    fi
+else
+    GPU_IDS="0"
+    echo "⚠️  nvidia-smi not found (no GPU or driver not installed), using CPU-only mode: $GPU_IDS"
+fi
 """
     else:
         gpu_setup = f"""
 GPU_IDS="{gpu_config}"
-echo "Using configured GPUs: $GPU_IDS"
+echo "🖥️  Using configured GPUs: $GPU_IDS"
 """
     
     # Combine all setup commands into a single script with proper environment
@@ -622,7 +658,12 @@ for gpu_id in "${{GPUS[@]}}"; do
         fi
         
         WANDB_CMD="wandb agent {sweep_id}"
-        FULL_CMD="export WANDB_API_KEY={wandb_key} && CUDA_VISIBLE_DEVICES=$gpu_id {command_runner} $WANDB_CMD"
+        # Only set CUDA_VISIBLE_DEVICES if nvidia-smi exists
+        if command -v nvidia-smi >/dev/null 2>&1; then
+            FULL_CMD="export WANDB_API_KEY={wandb_key} && CUDA_VISIBLE_DEVICES=$gpu_id {command_runner} $WANDB_CMD"
+        else
+            FULL_CMD="export WANDB_API_KEY={wandb_key} && {command_runner} $WANDB_CMD"
+        fi
         tmux send-keys -t "$SESSION_NAME" "$FULL_CMD" C-m
         
         echo "✅ Started process $((i+1)) on GPU $gpu_id"
