@@ -35,6 +35,7 @@ jt -t test_ubuntu init
 jt -t test_ubuntu config
 jt -t test_ubuntu update
 jt -t test_ubuntu start
+jt -t test_ubuntu install
 ```
 
 ### init
