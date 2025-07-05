@@ -42,6 +42,9 @@ class SSHExecutor:
                 return False
         except Exception as e:
             print(f"❌ Error testing SSH connection: {e}")
+            print(f"You can try to connect to {self.ssh_host} manually to check if the SSH connection is successful with the following command:")
+            print(f"ssh -p {self.ssh_port} {self.ssh_host}")
+            print(f"{cmd}")
             return False
     
     def execute_command(self, command: str, capture_output: bool = True, no_work_dir: bool = False, stream_output: bool = False, force_pty: bool = False) -> subprocess.CompletedProcess:
