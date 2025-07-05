@@ -565,28 +565,6 @@ def get_uv_command(remote_executor: RemoteTargetExecutor) -> str:
     return "export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$PATH\" && uv"
 
 
-def setup_gpu_configuration_remote(remote_executor: RemoteTargetExecutor, gpu_config: str, verbose: bool = False) -> bool:
-    """Setup GPU configuration on remote host"""
-    print("🖥️  Setting up GPU configuration...")
-    
-    if gpu_config == "0":
-        # Use all available GPUs - need to detect remotely
-        print("🔍 Detecting available GPUs...")
-        result = remote_executor.ssh.execute_command('nvidia-smi --query-gpu=count --format=csv,noheader | wc -l', stream_output=True)
-        if result.returncode != 0:
-            print("✗ Failed to detect GPUs")
-            return False
-        
-        result = remote_executor.ssh.execute_command('seq 0 $(($(nvidia-smi --query-gpu=count --format=csv,noheader | wc -l)-1)) | tr "\\n" "," | sed "s/,$//"', stream_output=True)
-        if result.returncode != 0:
-            print("✗ Failed to setup GPU IDs")
-            return False
-    else:
-        print(f"📊 Using configured GPUs: {gpu_config}")
-    
-    print("✅ GPU configuration setup complete")
-    return True
-
 
 def create_tmux_session_remote(remote_executor: RemoteTargetExecutor, sweep_id: str, gpu_config: str, num_processes: int, wandb_key: str, command_runner: str, verbose: bool = False) -> bool:
     """Create tmux session with wandb agents on remote host"""
@@ -599,51 +577,37 @@ def create_tmux_session_remote(remote_executor: RemoteTargetExecutor, sweep_id: 
     if command_runner.startswith("uv run"):
         command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
     
-    # Create session name
-    print("📝 Creating session name...")
-    session_commands = [
-        f'SWEEP_ID_SHORT=$(echo "{sweep_id}" | rev | cut -d"/" -f1 | rev)',
-        'CURRENT_TIME=$(date +"%m%d%H%M")',
-        'SESSION_NAME="${SWEEP_ID_SHORT}_${CURRENT_TIME}"',
-        'echo "Session name: $SESSION_NAME"'
-    ]
+    # Create session name and set up GPU configuration in a single command
+    print("📝 Creating session name and setting up environment...")
     
-    for cmd in session_commands:
-        result = remote_executor.ssh.execute_command(cmd, stream_output=True)
-        if result.returncode != 0:
-            print(f"✗ Failed to create session name: {cmd}")
-            return False
-    
-    # Create tmux session
-    print("🔧 Creating tmux session...")
-    result = remote_executor.ssh.execute_command('tmux new-session -d -s "$SESSION_NAME"', stream_output=True)
-    if result.returncode != 0:
-        print("✗ Failed to create tmux session")
-        return False
-    
-    # Setup GPU configuration
-    print("🔧 Setting up GPU configuration...")
     if gpu_config == "0":
-        gpu_setup_commands = [
-            'GPU_COUNT=$(nvidia-smi --query-gpu=count --format=csv,noheader | wc -l)',
-            'GPU_IDS=$(seq 0 $((GPU_COUNT-1)) | tr "\\n" "," | sed "s/,$//")',
-            'echo "Detected GPUs: $GPU_IDS"'
-        ]
+        gpu_setup = """
+GPU_COUNT=$(nvidia-smi --query-gpu=count --format=csv,noheader | wc -l)
+GPU_IDS=$(seq 0 $((GPU_COUNT-1)) | tr "\\n" "," | sed "s/,$//")"
+echo "Detected GPUs: $GPU_IDS"
+"""
     else:
-        gpu_setup_commands = [
-            f'GPU_IDS="{gpu_config}"',
-            'echo "Using configured GPUs: $GPU_IDS"'
-        ]
+        gpu_setup = f"""
+GPU_IDS="{gpu_config}"
+echo "Using configured GPUs: $GPU_IDS"
+"""
     
-    for cmd in gpu_setup_commands:
-        result = remote_executor.ssh.execute_command(cmd, stream_output=True)
-        if result.returncode != 0:
-            print(f"✗ Failed to setup GPU configuration: {cmd}")
-            return False
-    
-    # Add processes for each GPU
-    print("🔧 Adding processes to tmux session...")
-    process_setup_script = f"""
+    # Combine all setup commands into a single script
+    setup_script = f"""
+set -e
+SWEEP_ID_SHORT=$(echo "{sweep_id}" | rev | cut -d"/" -f1 | rev)
+CURRENT_TIME=$(date +"%m%d%H%M")
+SESSION_NAME="${{SWEEP_ID_SHORT}}_${{CURRENT_TIME}}"
+echo "Session name: $SESSION_NAME"
+
+{gpu_setup}
+
+# Create tmux session
+echo "🔧 Creating tmux session..."
+tmux new-session -d -s "$SESSION_NAME"
+
+# Add processes for each GPU
+echo "🔧 Adding processes to tmux session..."
 FIRST_PANE=true
 IFS="," read -ra GPUS <<< "$GPU_IDS"
 for gpu_id in "${{GPUS[@]}}"; do
@@ -662,18 +626,17 @@ for gpu_id in "${{GPUS[@]}}"; do
         echo "✅ Started process $((i+1)) on GPU $gpu_id"
     done
 done
+
+echo "🎉 All processes started successfully!"
+echo "🚀 All processes started in tmux session: $SESSION_NAME"
+echo "   View session: tmux attach-session -t $SESSION_NAME"
+echo "   Kill session: tmux kill-session -t $SESSION_NAME"
 """
     
-    result = remote_executor.ssh.execute_command(process_setup_script, stream_output=True)
+    result = remote_executor.ssh.execute_command(setup_script, stream_output=True)
     if result.returncode != 0:
-        print("✗ Failed to setup processes in tmux session")
+        print("✗ Failed to create tmux session and setup processes")
         return False
-    
-    # Print success message
-    print("🎉 All processes started successfully!")
-    result = remote_executor.ssh.execute_command('echo "🚀 All processes started in tmux session: $SESSION_NAME"', stream_output=True)
-    result = remote_executor.ssh.execute_command('echo "   View session: tmux attach-session -t $SESSION_NAME"', stream_output=True)
-    result = remote_executor.ssh.execute_command('echo "   Kill session: tmux kill-session -t $SESSION_NAME"', stream_output=True)
     
     print("✅ Tmux session created successfully")
     return True
@@ -820,11 +783,7 @@ def start_wandb_agents_remote(config_path: str, config: Dict[str, Any], target: 
         print(f"▶️  Command runner: {command_runner}")
         print("=" * 60)
         
-        # Step 1: Setup GPU configuration
-        if not setup_gpu_configuration_remote(remote_executor, gpu_config, verbose):
-            return False
-        
-        # Step 2: Create tmux session with wandb agents
+        # Create tmux session with wandb agents
         if not create_tmux_session_remote(remote_executor, sweep_id, gpu_config, num_processes, wandb_key, command_runner, verbose):
             return False
         
