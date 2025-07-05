@@ -22,6 +22,7 @@ from typing import Dict, Any, Optional, List
 from pathlib import Path
 
 from .utils import ConfigManager
+from .ssh_executor import RemoteTargetExecutor
 
 
 class StartManager:
@@ -509,5 +510,337 @@ def start_wandb_agents(config_path: str, target: str, verbose: bool = False) -> 
     Start wandb agents for a given target configuration.
     This is the main entry point called by the CLI.
     """
-    manager = StartManager(config_path, target, verbose)
-    return manager.start() 
+    try:
+        # Load configuration
+        config = ConfigManager.load_config(config_path)
+        if not config:
+            print("❌ Failed to load configuration")
+            return False
+        
+        # Get target configuration
+        if target not in config:
+            print(f"❌ Target '{target}' not found in configuration")
+            return False
+        
+        target_config = config[target]
+        
+        # Check if this is a remote target (has ssh_host)
+        ssh_host = target_config.get('ssh_host')
+        
+        if ssh_host:
+            # Remote execution
+            if verbose:
+                print(f"🌐 Executing start command on remote host: {ssh_host}")
+            
+            return start_wandb_agents_remote(config_path, config, target, target_config, verbose)
+        else:
+            # Local execution
+            if verbose:
+                print("🏠 Executing start command locally")
+            
+            manager = StartManager(config_path, target, verbose)
+            return manager.start()
+    
+    except Exception as e:
+        print(f"❌ Error in start_wandb_agents: {e}")
+        return False
+
+
+def get_uv_command(remote_executor: RemoteTargetExecutor) -> str:
+    """Get the correct uv command path"""
+    # Try different possible uv locations
+    possible_paths = [
+        "uv",  # Already in PATH
+        "~/.local/bin/uv",  # Standard user installation
+        "~/.cargo/bin/uv",  # Cargo installation
+        "$HOME/.local/bin/uv",  # Alternative home reference
+    ]
+    
+    for uv_path in possible_paths:
+        result = remote_executor.ssh.execute_command(f"command -v {uv_path}", no_work_dir=True)
+        if result.returncode == 0:
+            return uv_path
+    
+    # If nothing found, try with PATH update
+    return "export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$PATH\" && uv"
+
+
+def setup_gpu_configuration_remote(remote_executor: RemoteTargetExecutor, gpu_config: str, verbose: bool = False) -> bool:
+    """Setup GPU configuration on remote host"""
+    print("🖥️  Setting up GPU configuration...")
+    
+    if gpu_config == "0":
+        # Use all available GPUs - need to detect remotely
+        print("🔍 Detecting available GPUs...")
+        result = remote_executor.ssh.execute_command('nvidia-smi --query-gpu=count --format=csv,noheader | wc -l', stream_output=True)
+        if result.returncode != 0:
+            print("✗ Failed to detect GPUs")
+            return False
+        
+        result = remote_executor.ssh.execute_command('seq 0 $(($(nvidia-smi --query-gpu=count --format=csv,noheader | wc -l)-1)) | tr "\\n" "," | sed "s/,$//"', stream_output=True)
+        if result.returncode != 0:
+            print("✗ Failed to setup GPU IDs")
+            return False
+    else:
+        print(f"📊 Using configured GPUs: {gpu_config}")
+    
+    print("✅ GPU configuration setup complete")
+    return True
+
+
+def create_tmux_session_remote(remote_executor: RemoteTargetExecutor, sweep_id: str, gpu_config: str, num_processes: int, wandb_key: str, command_runner: str, verbose: bool = False) -> bool:
+    """Create tmux session with wandb agents on remote host"""
+    print("🚀 Creating tmux session...")
+    
+    # Get the correct uv command
+    uv_cmd = get_uv_command(remote_executor)
+    
+    # Replace uv in command_runner if needed
+    if command_runner.startswith("uv run"):
+        command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
+    
+    # Create session name
+    print("📝 Creating session name...")
+    session_commands = [
+        f'SWEEP_ID_SHORT=$(echo "{sweep_id}" | rev | cut -d"/" -f1 | rev)',
+        'CURRENT_TIME=$(date +"%m%d%H%M")',
+        'SESSION_NAME="${SWEEP_ID_SHORT}_${CURRENT_TIME}"',
+        'echo "Session name: $SESSION_NAME"'
+    ]
+    
+    for cmd in session_commands:
+        result = remote_executor.ssh.execute_command(cmd, stream_output=True)
+        if result.returncode != 0:
+            print(f"✗ Failed to create session name: {cmd}")
+            return False
+    
+    # Create tmux session
+    print("🔧 Creating tmux session...")
+    result = remote_executor.ssh.execute_command('tmux new-session -d -s "$SESSION_NAME"', stream_output=True)
+    if result.returncode != 0:
+        print("✗ Failed to create tmux session")
+        return False
+    
+    # Setup GPU configuration
+    print("🔧 Setting up GPU configuration...")
+    if gpu_config == "0":
+        gpu_setup_commands = [
+            'GPU_COUNT=$(nvidia-smi --query-gpu=count --format=csv,noheader | wc -l)',
+            'GPU_IDS=$(seq 0 $((GPU_COUNT-1)) | tr "\\n" "," | sed "s/,$//")',
+            'echo "Detected GPUs: $GPU_IDS"'
+        ]
+    else:
+        gpu_setup_commands = [
+            f'GPU_IDS="{gpu_config}"',
+            'echo "Using configured GPUs: $GPU_IDS"'
+        ]
+    
+    for cmd in gpu_setup_commands:
+        result = remote_executor.ssh.execute_command(cmd, stream_output=True)
+        if result.returncode != 0:
+            print(f"✗ Failed to setup GPU configuration: {cmd}")
+            return False
+    
+    # Add processes for each GPU
+    print("🔧 Adding processes to tmux session...")
+    process_setup_script = f"""
+FIRST_PANE=true
+IFS="," read -ra GPUS <<< "$GPU_IDS"
+for gpu_id in "${{GPUS[@]}}"; do
+    for ((i=0; i<{num_processes}; i++)); do
+        if [ "$FIRST_PANE" = true ]; then
+            FIRST_PANE=false
+        else
+            tmux split-window -t "$SESSION_NAME"
+            tmux select-layout -t "$SESSION_NAME" tiled
+        fi
+        
+        WANDB_CMD="wandb agent {sweep_id}"
+        FULL_CMD="export WANDB_API_KEY={wandb_key} && CUDA_VISIBLE_DEVICES=$gpu_id {command_runner} $WANDB_CMD"
+        tmux send-keys -t "$SESSION_NAME" "$FULL_CMD" C-m
+        
+        echo "✅ Started process $((i+1)) on GPU $gpu_id"
+    done
+done
+"""
+    
+    result = remote_executor.ssh.execute_command(process_setup_script, stream_output=True)
+    if result.returncode != 0:
+        print("✗ Failed to setup processes in tmux session")
+        return False
+    
+    # Print success message
+    print("🎉 All processes started successfully!")
+    result = remote_executor.ssh.execute_command('echo "🚀 All processes started in tmux session: $SESSION_NAME"', stream_output=True)
+    result = remote_executor.ssh.execute_command('echo "   View session: tmux attach-session -t $SESSION_NAME"', stream_output=True)
+    result = remote_executor.ssh.execute_command('echo "   Kill session: tmux kill-session -t $SESSION_NAME"', stream_output=True)
+    
+    print("✅ Tmux session created successfully")
+    return True
+
+
+def get_wandb_key_for_remote(config: Dict[str, Any], target_config: Dict[str, Any], verbose: bool = False) -> str:
+    """Get wandb key from local config for remote execution"""
+    print("🔑 Getting WANDB API key from local config...")
+    
+    # First try target specific wandb_key from local config
+    if "wandb_key" in target_config:
+        if verbose:
+            print("✅ Using wandb_key from local target configuration")
+        return target_config["wandb_key"]
+    
+    # Then try global wandb_key from local config  
+    if "wandb_key" in config:
+        if verbose:
+            print("✅ Using wandb_key from local global configuration")
+        return config["wandb_key"]
+    
+    # Finally try local environment variable
+    wandb_key = os.environ.get("WANDB_API_KEY", "")
+    if wandb_key:
+        if verbose:
+            print("✅ Using WANDB_API_KEY from local environment variable")
+        return wandb_key
+    
+    print("❌ WANDB_API_KEY not found in local config or environment")
+    return ""
+
+
+def start_wandb_agents_remote(config_path: str, config: Dict[str, Any], target: str, target_config: Dict[str, Any], verbose: bool = False) -> bool:
+    """Start wandb agents on remote host"""
+    try:
+        # Create remote executor
+        remote_executor = RemoteTargetExecutor(target_config, verbose)
+        
+        # Validate connection
+        if not remote_executor.validate_connection():
+            return False
+        
+        # Get configuration values
+        config_dir = Path(config_path).parent.resolve()
+        sweep_file_path_str = config.get('sweep_file', 'sweep_config.yaml')
+        
+        # Handle sweep file path
+        if Path(sweep_file_path_str).is_absolute():
+            sweep_file_path = Path(sweep_file_path_str)
+        elif '/' in sweep_file_path_str or '\\' in sweep_file_path_str:
+            if not (sweep_file_path_str.startswith('.jasminetool/') or sweep_file_path_str.startswith('./jasminetool/')):
+                print(f"❌ Relative paths are not allowed for sweep_file: {sweep_file_path_str}")
+                return False
+            sweep_file_path_str = sweep_file_path_str.replace('.jasminetool/', '').replace('./jasminetool/', '')
+            sweep_file_path = config_dir / sweep_file_path_str
+        else:
+            sweep_file_path = config_dir / sweep_file_path_str
+        
+        # Read sweep file locally
+        if not sweep_file_path.exists():
+            print(f"❌ Sweep file not found: {sweep_file_path}")
+            return False
+        
+        # Extract sweep ID from local file
+        with open(sweep_file_path, 'r') as f:
+            content = f.read()
+        
+        sweep_id = None
+        lines = content.strip().split('\n')
+        for line in lines:
+            if 'wandb agent' in line and 'Run sweep agent with:' in line:
+                parts = line.split('wandb agent')
+                if len(parts) > 1:
+                    sweep_id = parts[-1].strip()
+                    break
+        
+        if not sweep_id:
+            print(f"❌ Could not find sweep ID in file: {sweep_file_path}")
+            return False
+        
+        print(f"✅ Using sweep ID: {sweep_id}")
+        
+        # Get configuration values
+        default_gpu_config = target_config.get("gpu_config", "0,1,2,3")
+        default_num_processes = target_config.get("num_processes", 1)
+        command_runner = target_config.get("command_runner", "uv run")
+
+        # Ask user if they want to change the gpu config and num_processes temporarily
+        # Wait 3s for user input
+        print(f"📋 Current configuration:")
+        print(f"   gpu_config: {default_gpu_config}")
+        print(f"   num_processes: {default_num_processes}")
+        print()
+        
+        # Create a temporary StartManager instance to reuse the input logic
+        temp_manager = StartManager(config_path, target, verbose)
+        temp_manager.config = config
+        temp_manager.target_config = target_config
+        
+        # Get user input with timeout
+        gpu_input = temp_manager.get_user_input_with_timeout(
+            f"Enter GPU configuration (default: {default_gpu_config})"
+        )
+        
+        if gpu_input:
+            gpu_config = gpu_input
+            print(f"✅ Using GPU configuration: {gpu_config}")
+        else:
+            gpu_config = default_gpu_config
+            print(f"⏰ Timeout - using default GPU configuration: {gpu_config}")
+        
+        # Get number of processes
+        num_input = temp_manager.get_user_input_with_timeout(
+            f"Enter number of processes per GPU (default: {default_num_processes})"
+        )
+        
+        if num_input:
+            try:
+                num_processes = int(num_input)
+                print(f"✅ Using number of processes: {num_processes}")
+            except ValueError:
+                num_processes = default_num_processes
+                print(f"❌ Invalid number - using default: {num_processes}")
+        else:
+            num_processes = default_num_processes
+            print(f"⏰ Timeout - using default number of processes: {num_processes}")
+        
+        print()  # Add blank line for better readability
+        
+        # Get wandb key from local config
+        wandb_key = get_wandb_key_for_remote(config, target_config, verbose)
+        if not wandb_key:
+            print("❌ WANDB_API_KEY not found in local config or environment")
+            print("   Please add wandb_key to your local configuration:")
+            print("   - Add to target config: wandb_key: your_key_here")
+            print("   - Add to global config: wandb_key: your_key_here")
+            print("   - Set environment variable: export WANDB_API_KEY=your_key_here")
+            return False
+        
+        print(f"🚀 Starting remote wandb agents...")
+        print(f"🖥️  GPU config: {gpu_config}")
+        print(f"⚙️  Processes per GPU: {num_processes}")
+        print(f"🔑 WANDB key: {'***' + wandb_key[-4:] if len(wandb_key) > 4 else '***'}")
+        print(f"▶️  Command runner: {command_runner}")
+        print("=" * 60)
+        
+        # Step 1: Setup GPU configuration
+        if not setup_gpu_configuration_remote(remote_executor, gpu_config, verbose):
+            return False
+        
+        # Step 2: Create tmux session with wandb agents
+        if not create_tmux_session_remote(remote_executor, sweep_id, gpu_config, num_processes, wandb_key, command_runner, verbose):
+            return False
+        
+        print("=" * 60)
+        print("🎉 Remote wandb agents started successfully!")
+        print(f"🔍 To view: ssh {target_config.get('ssh_host')} 'tmux list-sessions'")
+        print(f"🔗 To attach: ssh {target_config.get('ssh_host')} 'tmux attach-session -t <session_name>'")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error starting wandb agents remotely: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        return False
+
+
+ 

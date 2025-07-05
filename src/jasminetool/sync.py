@@ -10,9 +10,10 @@ This module handles git and DVC synchronization operations.
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 
 from .utils import ConfigManager, GitManager
+from .ssh_executor import RemoteTargetExecutor
 
 
 class SyncManager:
@@ -457,10 +458,279 @@ def sync_project(config_path: str, target: str, verbose: bool = False) -> bool:
             print(f"✗ Target '{target}' not found in configuration")
             return False
         
-        # Run synchronization
-        sync_manager = SyncManager(config, target)
-        return sync_manager.run_sync(verbose=verbose)
+        target_config = config[target]
+        
+        # Check if this is a remote target (has ssh_host)
+        ssh_host = target_config.get('ssh_host')
+        
+        if ssh_host:
+            # Remote execution
+            if verbose:
+                print(f"🌐 Executing sync command on remote host: {ssh_host}")
+            
+            return sync_project_remote(config_path, config, target, target_config, verbose)
+        else:
+            # Local execution
+            if verbose:
+                print("🏠 Executing sync command locally")
+            
+            # Run synchronization locally
+            sync_manager = SyncManager(config, target)
+            return sync_manager.run_sync(verbose=verbose)
         
     except Exception as e:
         print(f"✗ Error during synchronization: {e}")
-        return False 
+        return False
+
+
+def get_uv_command(remote_executor: RemoteTargetExecutor) -> str:
+    """Get the correct uv command path"""
+    # Try different possible uv locations
+    possible_paths = [
+        "uv",  # Already in PATH
+        "~/.local/bin/uv",  # Standard user installation
+        "~/.cargo/bin/uv",  # Cargo installation
+        "$HOME/.local/bin/uv",  # Alternative home reference
+    ]
+    
+    for uv_path in possible_paths:
+        result = remote_executor.ssh.execute_command(f"command -v {uv_path}", no_work_dir=True)
+        if result.returncode == 0:
+            return uv_path
+    
+    # If nothing found, try with PATH update
+    return "export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$PATH\" && uv"
+
+
+def sync_git_branch_remote(remote_executor: RemoteTargetExecutor, work_dir: str, current_branch: str, verbose: bool = False) -> bool:
+    """Sync git branch on remote host"""
+    print(f"🔄 Syncing git branch: {current_branch}")
+    
+    # Fetch all branches
+    print("📥 Fetching latest changes from remote...")
+    result = remote_executor.ssh.execute_command("git fetch --all", stream_output=True)
+    if result.returncode != 0:
+        print(f"✗ Failed to fetch from remote")
+        return False
+    
+    # Checkout and sync the branch
+    print(f"🔄 Checking out branch: {current_branch}")
+    result = remote_executor.ssh.execute_command(f"git checkout {current_branch}", stream_output=True)
+    if result.returncode != 0:
+        print(f"✗ Failed to checkout branch: {current_branch}")
+        return False
+    
+    print(f"🔄 Pulling latest changes...")
+    result = remote_executor.ssh.execute_command(f"git reset --hard origin/{current_branch}", stream_output=True)
+    if result.returncode != 0:
+        print(f"✗ Failed to reset to origin/{current_branch}")
+        return False
+    
+    print("✅ Git branch synced successfully")
+    return True
+
+
+def setup_dvc_cache_remote(remote_executor: RemoteTargetExecutor, work_dir: str, dvc_cache: str, command_runner: str, verbose: bool = False) -> bool:
+    """Setup DVC cache on remote host"""
+    if not dvc_cache:
+        print("ℹ️  No DVC cache directory specified, skipping")
+        return True
+    
+    print(f"🔧 Setting up DVC cache: {dvc_cache}")
+    
+    # Get the correct uv command
+    uv_cmd = get_uv_command(remote_executor)
+    
+    # Replace uv in command_runner if needed
+    if command_runner.startswith("uv run"):
+        command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
+    
+    result = remote_executor.ssh.execute_command(f'{command_runner} dvc cache dir --local "{dvc_cache}"', stream_output=True)
+    
+    if result.returncode == 0:
+        print("✅ DVC cache directory set successfully")
+        return True
+    else:
+        print(f"✗ Failed to set DVC cache directory")
+        return False
+
+
+def setup_dvc_remote_remote(remote_executor: RemoteTargetExecutor, work_dir: str, dvc_remote: str, command_runner: str, verbose: bool = False) -> bool:
+    """Setup DVC remote on remote host"""
+    if not dvc_remote:
+        print("ℹ️  No DVC remote specified, skipping")
+        return True
+    
+    print(f"🔧 Setting up DVC remote: {dvc_remote}")
+    
+    # Get the correct uv command
+    uv_cmd = get_uv_command(remote_executor)
+    
+    # Replace uv in command_runner if needed
+    if command_runner.startswith("uv run"):
+        command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
+    
+    result = remote_executor.ssh.execute_command(f'{command_runner} dvc remote add --local jasmine_remote "{dvc_remote}"', stream_output=True)
+    
+    if result.returncode == 0:
+        print("✅ DVC remote 'jasmine_remote' added successfully")
+        return True
+    else:
+        # Check if remote already exists
+        if "remote 'jasmine_remote' already exists" in result.stderr:
+            print("ℹ️  DVC remote 'jasmine_remote' already exists")
+            return True
+        else:
+            print(f"✗ Failed to add DVC remote")
+            return False
+
+
+def dvc_pull_remote(remote_executor: RemoteTargetExecutor, work_dir: str, dvc_remote: str, command_runner: str, verbose: bool = False) -> bool:
+    """Pull DVC data on remote host"""
+    if not dvc_remote:
+        print("ℹ️  No DVC remote specified, skipping DVC pull")
+        return True
+    
+    print("📥 Pulling DVC data...")
+    
+    # Get the correct uv command
+    uv_cmd = get_uv_command(remote_executor)
+    
+    # Replace uv in command_runner if needed
+    if command_runner.startswith("uv run"):
+        command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
+    
+    result = remote_executor.ssh.execute_command(f'{command_runner} dvc pull -r jasmine_remote', stream_output=True)
+    
+    if result.returncode == 0:
+        print("✅ DVC data pulled successfully")
+        return True
+    else:
+        print(f"✗ Failed to pull DVC data")
+        return False
+
+
+def get_current_branch_local(config: Dict[str, Any], target: str) -> str:
+    """Get current branch from local repository"""
+    try:
+        # Create a temporary SyncManager to get source directory
+        sync_manager = SyncManager(config, target)
+        
+        # Get current branch from local repository
+        result = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            cwd=sync_manager.src_dir,
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            branch = result.stdout.strip()
+            print(f"📍 Current local branch: {branch}")
+            return branch
+        else:
+            print("✗ Failed to get current branch, using main")
+            return "main"
+            
+    except Exception as e:
+        print(f"✗ Error getting current branch: {e}, using main")
+        return "main"
+
+
+def sync_project_remote(config_path: str, config: Dict[str, Any], target: str, target_config: Dict[str, Any], verbose: bool = False) -> bool:
+    """Sync project on remote host"""
+    try:
+        # Create remote executor
+        remote_executor = RemoteTargetExecutor(target_config, verbose)
+        
+        # Validate connection
+        if not remote_executor.validate_connection():
+            return False
+        
+        # First, perform local validation
+        if not perform_local_validation(config_path, config, target, target_config, verbose):
+            return False
+        
+        # Get current branch from local repository
+        current_branch = get_current_branch_local(config, target)
+        
+        # Get configuration
+        work_dir = target_config.get('work_dir', '')
+        dvc_cache = target_config.get('dvc_cache', '')
+        dvc_remote = target_config.get('dvc_remote', '')
+        command_runner = target_config.get('command_runner', 'uv run')
+        
+        print(f"🔄 Starting remote synchronization...")
+        print(f"📁 Work directory: {work_dir}")
+        print(f"🌿 Branch: {current_branch}")
+        if dvc_cache:
+            print(f"💾 DVC cache: {dvc_cache}")
+        if dvc_remote:
+            print(f"☁️  DVC remote: {dvc_remote}")
+        print(f"▶️  Command runner: {command_runner}")
+        print("=" * 60)
+        
+        # Step 1: Sync git branch
+        if not sync_git_branch_remote(remote_executor, work_dir, current_branch, verbose):
+            return False
+        
+        # Step 2: Setup DVC cache
+        if not setup_dvc_cache_remote(remote_executor, work_dir, dvc_cache, command_runner, verbose):
+            return False
+        
+        # Step 3: Setup DVC remote
+        if not setup_dvc_remote_remote(remote_executor, work_dir, dvc_remote, command_runner, verbose):
+            return False
+        
+        # Step 4: Pull DVC data
+        if not dvc_pull_remote(remote_executor, work_dir, dvc_remote, command_runner, verbose):
+            return False
+        
+        print("=" * 60)
+        print("🎉 Project synchronization completed successfully!")
+        print(f"📁 Project location: {work_dir}")
+        print(f"🌿 Branch: {current_branch}")
+        print("✅ Git branch synced")
+        print("✅ DVC data synchronized")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error syncing project remotely: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        return False
+
+
+def perform_local_validation(config_path: str, config: Dict[str, Any], target: str, target_config: Dict[str, Any], verbose: bool = False) -> bool:
+    """Perform local validation checks before remote sync"""
+    try:
+        # Create a temporary SyncManager instance just for validation
+        sync_manager = SyncManager(config, target)
+        
+        # Perform the same validation checks as local sync
+        if not sync_manager.check_git_urls_match():
+            print("❌ Git URLs do not match")
+            return False
+        
+        if not sync_manager.check_git_clean(sync_manager.src_dir):
+            print("❌ Source directory is not clean")
+            return False
+        
+        if not sync_manager.check_dvc_clean(sync_manager.src_dir):
+            print("❌ Source DVC is not clean")
+            return False
+        
+        print("✅ Local validation passed")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error in local validation: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        return False
+
+
+ 
