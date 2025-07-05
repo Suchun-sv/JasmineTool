@@ -75,7 +75,7 @@ class RemoteMode(ExecutionMode):
         
         # Build SSH command
         ssh_script = '\n'.join(remote_commands)
-        ssh_command = f'ssh -p {ssh_port} {ssh_host} << EOF\n{ssh_script}\nexit\nEOF'
+        ssh_command = f'ssh -p {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {ssh_host} << EOF\n{ssh_script}\nexit\nEOF'
         
         print(f"Executing SSH command: {ssh_command}")
         
@@ -169,7 +169,7 @@ class RemoteGpuMode(ExecutionMode):
         num_processes = server_config['num_processes']
         
         # Test SSH connection
-        test_cmd = f'ssh -p {ssh_port} -o ConnectTimeout=5 {ssh_host} echo "Connection test"'
+        test_cmd = f'ssh -p {ssh_port} -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {ssh_host} echo "Connection test"'
         test_result = subprocess.run(test_cmd, shell=True, capture_output=True)
         
         if test_result.returncode != 0:
@@ -195,7 +195,7 @@ class RemoteGpuMode(ExecutionMode):
         
         # Build SSH command
         ssh_script = '\n'.join(remote_commands)
-        ssh_command = f'ssh -p {ssh_port} {ssh_host} << EOF\n{ssh_script}\nexit\nEOF'
+        ssh_command = f'ssh -p {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {ssh_host} << EOF\n{ssh_script}\nexit\nEOF'
         
         print(f"Executing on {ssh_host}")
         
