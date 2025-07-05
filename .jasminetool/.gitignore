@@ -1,9 +1,0 @@
-# JasmineTool generated files
-logs/
-temp/
-*.log
-*.tmp
-*.pid
-
-# User-specific configurations
-local_config.yaml
