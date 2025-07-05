@@ -229,7 +229,7 @@ class SyncManager:
             print(f"🔧 Setting up DVC remote: {self.dvc_remote}")
             
             # Add DVC remote using uv run
-            cmd = f"{self.command_runner} dvc remote add --local jasmine_remote {self.dvc_remote}".split()
+            cmd = f"{self.command_runner} dvc remote add --local jasmine_remote {self.dvc_remote} --force".split()
             result = subprocess.run(
                 cmd,
                 cwd=self.work_dir,
@@ -545,7 +545,7 @@ def setup_dvc_cache_remote(remote_executor: RemoteTargetExecutor, work_dir: str,
     if command_runner.startswith("uv run"):
         command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
     
-    result = remote_executor.ssh.execute_command(f'{command_runner} dvc cache dir --local "{dvc_cache}"', stream_output=True)
+    result = remote_executor.ssh.execute_command(f'{command_runner} dvc cache dir --local "{dvc_cache}" --force', stream_output=True)
     
     if result.returncode == 0:
         print("✅ DVC cache directory set successfully")

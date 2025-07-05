@@ -197,8 +197,8 @@ class ProjectInitializer:
             success = False
         
         # Step 5: Ask for update
-        if success and self.ask_for_update():
-            print("ℹ️  Update command will be implemented in future versions")
+        # if success and self.ask_for_update():
+        #     print("ℹ️  Update command will be implemented in future versions")
         
         print("=" * 60)
         if success:
