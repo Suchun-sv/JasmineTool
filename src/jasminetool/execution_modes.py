@@ -47,6 +47,7 @@ class RemoteMode(ExecutionMode):
         current_branch = kwargs.get('current_branch', 'main')
         
         ssh_host = config['ssh_host']
+        ssh_port = config.get('ssh_port', 22)
         work_dir = config['work_dir']
         gpu_config = config['gpu_config']
         num_processes = config['num_processes']
@@ -74,7 +75,7 @@ class RemoteMode(ExecutionMode):
         
         # Build SSH command
         ssh_script = '\n'.join(remote_commands)
-        ssh_command = f'ssh {ssh_host} << EOF\n{ssh_script}\nexit\nEOF'
+        ssh_command = f'ssh -p {ssh_port} {ssh_host} << EOF\n{ssh_script}\nexit\nEOF'
         
         print(f"Executing SSH command: {ssh_command}")
         
@@ -162,12 +163,13 @@ class RemoteGpuMode(ExecutionMode):
     def _try_execute_on_server(self, server_config: Dict[str, Any], command: str, current_branch: str) -> bool:
         """Try to execute on a specific server"""
         ssh_host = server_config['ssh_host']
+        ssh_port = server_config.get('ssh_port', 22)
         work_dir = server_config['work_dir']
         gpu_config = server_config['gpu_config']
         num_processes = server_config['num_processes']
         
         # Test SSH connection
-        test_cmd = f'ssh -o ConnectTimeout=5 {ssh_host} echo "Connection test"'
+        test_cmd = f'ssh -p {ssh_port} -o ConnectTimeout=5 {ssh_host} echo "Connection test"'
         test_result = subprocess.run(test_cmd, shell=True, capture_output=True)
         
         if test_result.returncode != 0:
@@ -193,7 +195,7 @@ class RemoteGpuMode(ExecutionMode):
         
         # Build SSH command
         ssh_script = '\n'.join(remote_commands)
-        ssh_command = f'ssh {ssh_host} << EOF\n{ssh_script}\nexit\nEOF'
+        ssh_command = f'ssh -p {ssh_port} {ssh_host} << EOF\n{ssh_script}\nexit\nEOF'
         
         print(f"Executing on {ssh_host}")
         

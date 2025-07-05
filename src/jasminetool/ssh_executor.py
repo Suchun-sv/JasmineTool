@@ -51,9 +51,9 @@ class SSHExecutor:
         
         # Build the SSH command
         if no_work_dir:
-            ssh_cmd = f"ssh {self.ssh_host} '{escaped_command}'"
+            ssh_cmd = f"ssh -p {self.ssh_port} {self.ssh_host} '{escaped_command}'"
         else:
-            ssh_cmd = f"ssh {self.ssh_host} 'cd {self.work_dir} && {escaped_command}'"
+            ssh_cmd = f"ssh -p {self.ssh_port} {self.ssh_host} 'cd {self.work_dir} && {escaped_command}'"
         
         if self.verbose:
             print(f"🔧 Executing on {self.ssh_host}: {command}")
@@ -152,7 +152,7 @@ class SSHExecutor:
         combined_cmd = " && ".join(escaped_commands)
         
         # Build the SSH command
-        ssh_cmd = f"ssh {self.ssh_host} 'cd {self.work_dir} && {combined_cmd}'"
+        ssh_cmd = f"ssh -p {self.ssh_port} {self.ssh_host} 'cd {self.work_dir} && {combined_cmd}'"
         
         if self.verbose:
             print(f"🔧 Executing on {self.ssh_host}:")
@@ -180,7 +180,7 @@ class SSHExecutor:
             
             # Copy script to remote host
             remote_script_path = f"/tmp/{script_name}"
-            scp_cmd = f"scp {temp_script_path} {self.ssh_host}:{remote_script_path}"
+            scp_cmd = f"scp -P {self.ssh_port} {temp_script_path} {self.ssh_host}:{remote_script_path}"
             
             if self.verbose:
                 print(f"📤 Uploading script to {self.ssh_host}:{remote_script_path}")
@@ -192,7 +192,7 @@ class SSHExecutor:
                 return scp_result
             
             # Execute the script
-            exec_cmd = f"ssh {self.ssh_host} 'cd {self.work_dir} && bash {remote_script_path}'"
+            exec_cmd = f"ssh -p {self.ssh_port} {self.ssh_host} 'cd {self.work_dir} && bash {remote_script_path}'"
             
             if self.verbose:
                 print(f"🚀 Executing script on {self.ssh_host}")
@@ -200,7 +200,7 @@ class SSHExecutor:
             result = subprocess.run(exec_cmd, shell=True, text=True)
             
             # Clean up remote script
-            cleanup_cmd = f"ssh {self.ssh_host} 'rm -f {remote_script_path}'"
+            cleanup_cmd = f"ssh -p {self.ssh_port} {self.ssh_host} 'rm -f {remote_script_path}'"
             subprocess.run(cleanup_cmd, shell=True, capture_output=True)
             
             # Clean up local script
@@ -248,7 +248,7 @@ class SSHExecutor:
     
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         """Upload a file to the remote host"""
-        scp_cmd = f"scp {local_path} {self.ssh_host}:{remote_path}"
+        scp_cmd = f"scp -P {self.ssh_port} {local_path} {self.ssh_host}:{remote_path}"
         
         if self.verbose:
             print(f"📤 Uploading {local_path} to {self.ssh_host}:{remote_path}")
@@ -265,7 +265,7 @@ class SSHExecutor:
     
     def download_file(self, remote_path: str, local_path: str) -> bool:
         """Download a file from the remote host"""
-        scp_cmd = f"scp {self.ssh_host}:{remote_path} {local_path}"
+        scp_cmd = f"scp -P {self.ssh_port} {self.ssh_host}:{remote_path} {local_path}"
         
         if self.verbose:
             print(f"📥 Downloading {self.ssh_host}:{remote_path} to {local_path}")
@@ -301,7 +301,7 @@ class RemoteTargetExecutor:
             raise ValueError("work_dir is required for remote target operations")
         
         # Create SSH executor
-        self.ssh = SSHExecutor(self.ssh_host, self.work_dir, verbose)
+        self.ssh = SSHExecutor(self.ssh_host, self.ssh_port, self.work_dir, verbose)
     
     def validate_connection(self) -> bool:
         """Validate SSH connection and work directory"""
