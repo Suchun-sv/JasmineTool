@@ -62,6 +62,9 @@ if exist $dvc_remote, dvc remote add --local jasmine_remote" $dvc_remote"
 if exist $dvc_remote:
     dvc pull -r jasmine_remote
 
-### 
 
-### status
+### start
+
+### install
+
+install the "jt -t [target] sync && jt -t [target] start" to the .vscode/tasks.json, note the label will be "sweep [target]"

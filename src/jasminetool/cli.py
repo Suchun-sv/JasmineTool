@@ -18,6 +18,7 @@ from .project_init import init_project
 from .sync import sync_project
 from .config_display import display_config
 from .sweep import run_sweep, install_sweep_task
+from .install import install_target_tasks
 from .version import __version__
 
 
@@ -31,10 +32,12 @@ def create_parser() -> argparse.ArgumentParser:
 Examples:
   jasminetool init                           # Initialize the configuration file
   jasminetool config                         # Display the configuration file
+  jasminetool install                        # Install all target tasks to VS Code
   jasminetool -t test_ubuntu config         # Display configuration for specific target
   jasminetool -t test_ubuntu init           # Initialize project for target
   jasminetool -t test_ubuntu sync           # Synchronize project for target
   jasminetool -t test_ubuntu start          # Start wandb agents in tmux sessions
+  jasminetool -t test_ubuntu install        # Install target tasks to VS Code
   jasminetool sweep --config sweep.yaml     # Run wandb sweep with config file
   jasminetool sweep --install               # Install wandb sweep command to VS Code tasks
   jasminetool local_gpu                      # Run on local GPU
@@ -186,6 +189,29 @@ def main(args: Optional[List[str]] = None) -> int:
                 traceback.print_exc()
             return 1
     
+    # Pattern 3b: jasminetool install (install all target tasks to VS Code)
+    elif action == "install" and not target:
+        if parsed_args.verbose:
+            print("Installing all target tasks to VS Code...")
+        
+        try:
+            success = install_target_tasks(
+                config_path=parsed_args.config,
+                targets=None,  # Install all targets
+                force=parsed_args.force,
+                verbose=parsed_args.verbose
+            )
+            return 0 if success else 1
+        except KeyboardInterrupt:
+            print("\nInstall operation cancelled by user", file=sys.stderr)
+            return 1
+        except Exception as e:
+            print(f"Install operation failed: {e}", file=sys.stderr)
+            if parsed_args.verbose:
+                import traceback
+                traceback.print_exc()
+            return 1
+    
     # Pattern 4: jasminetool -t target init (initialize project for target)
     elif action == "init" and target:
         if parsed_args.verbose:
@@ -253,7 +279,30 @@ def main(args: Optional[List[str]] = None) -> int:
                 traceback.print_exc()
             return 1
     
-    # Pattern 7: jasminetool target (execute target configuration)
+    # Pattern 7: jasminetool -t target install (install target tasks to VS Code)
+    elif action == "install" and target:
+        if parsed_args.verbose:
+            print(f"Installing VS Code tasks for target: {target}")
+        
+        try:
+            success = install_target_tasks(
+                config_path=parsed_args.config,
+                targets=[target],
+                force=parsed_args.force,
+                verbose=parsed_args.verbose
+            )
+            return 0 if success else 1
+        except KeyboardInterrupt:
+            print("\nInstall operation cancelled by user", file=sys.stderr)
+            return 1
+        except Exception as e:
+            print(f"Install operation failed: {e}", file=sys.stderr)
+            if parsed_args.verbose:
+                import traceback
+                traceback.print_exc()
+            return 1
+    
+    # Pattern 9: jasminetool target (execute target configuration)
     elif action and not target:
         target_name = action  # action is actually the target name
         
@@ -295,18 +344,20 @@ def main(args: Optional[List[str]] = None) -> int:
                 traceback.print_exc()
             return 1
     
-    # Pattern 8: No action provided or invalid combination
+    # Pattern 10: No action provided or invalid combination
     else:
         print("Error: Action is required", file=sys.stderr)
         print("Usage:", file=sys.stderr)
         print("  jasminetool init                    # Initialize JasmineTool configuration", file=sys.stderr)
         print("  jasminetool config                  # Display configuration file", file=sys.stderr)
+        print("  jasminetool install                 # Install all target tasks to VS Code", file=sys.stderr)
         print("  jasminetool -t target config        # Display configuration for specific target", file=sys.stderr)
         print("  jasminetool sweep --config file.yaml # Run wandb sweep with config file", file=sys.stderr)
         print("  jasminetool sweep --install         # Install wandb sweep command to VS Code tasks", file=sys.stderr)
         print("  jasminetool -t target init          # Initialize project for target", file=sys.stderr)
         print("  jasminetool -t target sync          # Synchronize project for target", file=sys.stderr)
         print("  jasminetool -t target start         # Start wandb agents for target", file=sys.stderr)
+        print("  jasminetool -t target install       # Install target tasks to VS Code", file=sys.stderr)
         print("  jasminetool target                  # Execute target configuration", file=sys.stderr)
         print("  jasminetool --help                  # Show help", file=sys.stderr)
         return 1
