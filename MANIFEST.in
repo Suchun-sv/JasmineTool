@@ -1,0 +1,28 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include setup.py
+include requirements.txt
+
+# Include all Python files
+recursive-include src *.py
+
+# Include configuration examples
+recursive-include examples *.yaml *.yml *.json
+
+# Include documentation
+recursive-include docs *.md *.rst *.txt
+
+# Exclude development files
+exclude .gitignore
+exclude .python-version
+exclude run_unified.py
+exclude main.py
+exclude test_install.py
+prune .git
+prune __pycache__
+prune *.egg-info
+prune .pytest_cache
+prune .coverage
+prune htmlcov
+prune .jasminetool 

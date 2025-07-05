@@ -1,0 +1,42 @@
+'# JasmineTool Configuration': null
+'# Modify this file to suit your needs': null
+'# This is the default configuration created by ''jasminetool init''': null
+test_ubuntu:
+  mode: "remote"
+  ssh_host: "suchun@127.0.0.1"
+  github_url: "git@github.com:Suchun-sv/VectorTranslation.git"
+  work_dir: "/home/suchun/github/VectorTranslationLocal"
+  dvc_cache: "/mnt/work/work/.cache/dvc-cache/VectorTranslation"
+  dvc_remote: "s3://dvc-local-cache/VectorTranslation/"
+local_gpu:
+  gpu_config: '0'
+  mode: local
+  num_processes: 1
+pattern: wandb agent
+pre_commands:
+- command: echo 'Starting JasmineTool execution'
+  working_dir: .
+remote_server:
+  git_operations:
+  - git fetch origin
+  - git checkout {branch}
+  - git pull origin {branch}
+  gpu_config: '0'
+  mode: remote
+  num_processes: 1
+  ssh_host: user@remote-server.com
+  sync_method: git
+  work_dir: /path/to/project
+slurm_cluster:
+  gpu_config: '0'
+  mode: slurm
+  num_processes: 1
+  slurm_config:
+    gres: gpu:1
+    job-name: jasmine-sweep
+    nodes: 1
+    ntasks-per-node: 1
+    partition: gpu
+    time: '24:00:00'
+src_dir: /home/suchun/github/VectorTranslation
+sweep_file: ./sweep_config.yaml

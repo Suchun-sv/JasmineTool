@@ -1,0 +1,76 @@
+# JasmineTool Configuration Example
+# This file demonstrates how to configure different execution modes
+
+# Global settings
+sweep_file: "./sweep_config.yaml"
+pattern: "wandb agent"
+
+test_ubuntu:
+  mode: "remote"
+  ssh_host: "suchun@127.0.0.1"
+  github_url: "git@github.com:Suchun-sv/VectorTranslation.git"
+  work_dir: "/home/suchun/github/VectorTranslationLocal"
+  dvc_cache: "/mnt/work/work/.cache/dvc-cache/VectorTranslation"
+  dvc_remote: "s3://dvc-local-cache/VectorTranslation/"
+
+# Local GPU execution
+local_gpu:
+  mode: "local"
+  gpu_config: "0,1,2,3"  # GPU IDs to use
+  num_processes: 2       # Number of processes per GPU
+
+# Remote server execution
+remote_server:
+  mode: "remote"
+  ssh_host: "user@remote-server.com"
+  work_dir: "/path/to/project"
+  gpu_config: "0,1"
+  num_processes: 1
+  sync_method: "git"     # or "rsync"
+  git_operations:
+    - "git fetch origin"
+    - "git checkout {branch}"
+    - "git pull origin {branch}"
+
+# SLURM cluster execution
+slurm_cluster:
+  mode: "slurm"
+  gpu_config: "0,1,2,3"
+  num_processes: 2
+  slurm_config:
+    job-name: "jasmine-sweep"
+    time: "24:00:00"
+    nodes: 1
+    ntasks-per-node: 1
+    gres: "gpu:4"
+    partition: "gpu"
+
+# Remote GPU with multiple servers
+remote_gpu:
+  mode: "remote_gpu"
+  servers:
+    - ssh_host: "user@gpu-server1.com"
+      work_dir: "/path/to/project"
+      gpu_config: "0,1"
+      num_processes: 1
+      sync_method: "git"
+      git_operations:
+        - "git fetch origin"
+        - "git checkout {branch}"
+        - "git pull origin {branch}"
+    - ssh_host: "user@gpu-server2.com"
+      work_dir: "/path/to/project"
+      gpu_config: "0,1,2,3"
+      num_processes: 2
+      sync_method: "git"
+      git_operations:
+        - "git fetch origin"
+        - "git checkout {branch}"
+        - "git pull origin {branch}"
+
+# Pre-commands (optional)
+pre_commands:
+  - command: "echo 'Starting JasmineTool execution'"
+    working_dir: "."
+  - command: "nvidia-smi"
+    working_dir: "." 
