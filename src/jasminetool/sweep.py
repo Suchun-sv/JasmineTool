@@ -22,9 +22,30 @@ class SweepManager:
     
     def __init__(self, config_path: str):
         """Initialize with configuration path"""
-        self.config_path = Path(config_path)
+        self.config_path = Path(self.normalize_config_path(config_path))
         self.config: Optional[Dict[str, Any]] = None
         self.sweep_file = ""
+    
+    def normalize_config_path(self, config_path: str) -> str:
+        """
+        Normalize config path according to rules:
+        - Accept absolute paths as-is
+        - Accept single filenames and place them in .jasminetool/
+        - Reject relative paths (containing path separators but not absolute)
+        """
+        path = Path(config_path)
+        
+        # If it's an absolute path, use it as-is
+        if path.is_absolute():
+            return str(path)
+        
+        # If it's a single filename (no path separators), place it in .jasminetool/
+        if os.sep not in config_path and '/' not in config_path:
+            return str(Path(".jasminetool") / config_path)
+        
+        # If it's a relative path with path separators, reject it
+        raise ValueError(f"Relative paths are not allowed: {config_path}. "
+                        f"Use absolute paths or single filenames (will be placed in .jasminetool/)")
     
     def load_config(self) -> bool:
         """Load configuration from file"""
@@ -112,6 +133,28 @@ class VSCodeTasksManager:
         """Initialize VS Code tasks manager"""
         self.vscode_dir = Path(".vscode")
         self.tasks_file = self.vscode_dir / "tasks.json"
+        self.config_path = Path(self.normalize_config_path(self.get_sweep_log_file_from_config()))
+    
+    def normalize_config_path(self, config_path: str) -> str:
+        """
+        Normalize config path according to rules:
+        - Accept absolute paths as-is
+        - Accept single filenames and place them in .jasminetool/
+        - Reject relative paths (containing path separators but not absolute)
+        """
+        path = Path(config_path)
+        
+        # If it's an absolute path, use it as-is
+        if path.is_absolute():
+            return str(path)
+        
+        # If it's a single filename (no path separators), place it in .jasminetool/ 
+        if os.sep not in config_path and '/' not in config_path:
+            return str(Path(".jasminetool") / config_path)
+        
+        # If it's a relative path with path separators, reject it
+        raise ValueError(f"Relative paths are not allowed: {config_path}. "
+                        f"Use absolute paths or single filenames (will be placed in .jasminetool/)")
     
     def ensure_vscode_dir(self) -> bool:
         """Ensure .vscode directory exists"""
@@ -139,20 +182,19 @@ class VSCodeTasksManager:
             jasmine_config_path = Path(".jasminetool/config.yaml")
             if jasmine_config_path.exists():
                 jasmine_config = ConfigManager.load_config(str(jasmine_config_path))
-                return jasmine_config.get('sweep_file', './tools/sweep.latest')
+                return jasmine_config.get('sweep_file', 'sweep_config.yaml')
             else:
-                return './tools/sweep.latest'
+                return 'sweep_config.yaml'
         except:
-            return './tools/sweep.latest'
+            return "sweep_config.yaml"
     
     def create_sweep_task(self) -> Dict[str, Any]:
         """Create a wandb sweep task definition"""
-        sweep_log_file = self.get_sweep_log_file_from_config()
         
         return {
             "label": "wandb sweep",
             "type": "shell",
-            "command": f"(wandb sweep ${{file}} 2>&1) | tee {sweep_log_file}",
+            "command": f"(wandb sweep ${{file}} 2>&1) | tee {self.config_path}",
             "group": {
                 "kind": "build",
                 "isDefault": True

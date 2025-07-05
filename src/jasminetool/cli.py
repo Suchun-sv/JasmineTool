@@ -60,8 +60,8 @@ Examples:
     
     parser.add_argument(
         "--config",
-        default="./.jasminetool/config.yaml",
-        help="Path to configuration file (default: ./.jasminetool/config.yaml)"
+        default="config.yaml",
+        help="Path to configuration file (default: config.yaml -> .jasminetool/config.yaml)"
     )
     
     parser.add_argument(

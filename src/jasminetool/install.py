@@ -23,6 +23,27 @@ class VSCodeTasksManager:
         self.vscode_dir = Path(".vscode")
         self.tasks_file = self.vscode_dir / "tasks.json"
     
+    def normalize_config_path(self, config_path: str) -> str:
+        """
+        Normalize config path according to rules:
+        - Accept absolute paths as-is
+        - Accept single filenames and place them in .jasminetool/
+        - Reject relative paths (containing path separators but not absolute)
+        """
+        path = Path(config_path)
+        
+        # If it's an absolute path, use it as-is
+        if path.is_absolute():
+            return str(path)
+        
+        # If it's a single filename (no path separators), place it in .jasminetool/
+        if os.sep not in config_path and '/' not in config_path:
+            return str(Path(".jasminetool") / config_path)
+        
+        # If it's a relative path with path separators, reject it
+        raise ValueError(f"Relative paths are not allowed: {config_path}. "
+                        f"Use absolute paths or single filenames (will be placed in .jasminetool/)")
+    
     def ensure_vscode_dir(self) -> bool:
         """Ensure .vscode directory exists"""
         try:
@@ -92,8 +113,10 @@ class VSCodeTasksManager:
             print(f"✗ Error saving tasks.json: {e}")
             return False
     
-    def create_target_task(self, target: str, config_path: str = "./.jasminetool/config.yaml") -> Dict[str, Any]:
+    def create_target_task(self, target: str, config_path: str = "config.yaml") -> Dict[str, Any]:
         """Create a JasmineTool target task definition"""
+        normalized_path = self.normalize_config_path(config_path)
+        
         return {
             "label": f"sweep {target}",
             "type": "shell",
@@ -119,7 +142,8 @@ class VSCodeTasksManager:
     def get_target_list(self, config_path: str) -> List[str]:
         """Get list of available targets from configuration"""
         try:
-            config = ConfigManager.load_config(config_path)
+            normalized_path = self.normalize_config_path(config_path)
+            config = ConfigManager.load_config(normalized_path)
             if not config:
                 return []
             
@@ -143,6 +167,14 @@ class VSCodeTasksManager:
                 return False
             
             print("🔧 Installing JasmineTool target tasks to VS Code...")
+            
+            # Normalize and validate config path
+            try:
+                normalized_path = self.normalize_config_path(config_path)
+                print(f"📁 Using config file: {normalized_path}")
+            except ValueError as e:
+                print(f"❌ Invalid config path: {e}")
+                return False
             
             # Get target list
             if targets is None:
