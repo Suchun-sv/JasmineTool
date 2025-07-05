@@ -600,7 +600,7 @@ def dvc_pull_remote(remote_executor: RemoteTargetExecutor, work_dir: str, dvc_re
     if command_runner.startswith("uv run"):
         command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
     
-    result = remote_executor.ssh.execute_command(f'{command_runner} dvc pull -r jasmine_remote', stream_output=True)
+    result = remote_executor.ssh.execute_command(f'{command_runner} dvc pull -r jasmine_remote --force', stream_output=True)
     
     if result.returncode == 0:
         print("✅ DVC data pulled successfully")
