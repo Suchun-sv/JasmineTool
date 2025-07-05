@@ -13,6 +13,21 @@ jt init
 init the config file in .jasminetool/config.yaml
 set the src_dir to the current directory
 
+## sweep
+
+```bash
+jt sweep --config XXX.yaml
+```
+
+执行的是 wandb sweep config.yaml 2>&1 | tee $sweep_file
+
+
+```bash
+jt sweep --install
+```
+
+把wandb sweep 的命令添加到 .vscode/tasks.json 中
+
 
 ## -t target
 ```bash
@@ -46,6 +61,6 @@ if exist $dvc_remote, dvc remote add --local jasmine_remote" $dvc_remote"
 if exist $dvc_remote:
     dvc pull -r jasmine_remote
 
-### start
+### 
 
 ### status

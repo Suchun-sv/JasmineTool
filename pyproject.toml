@@ -8,6 +8,7 @@ dependencies = [
     "pyyaml>=5.4.0",
     "setuptools>=75.3.2",
     "toml>=0.10.2",
+    "wandb>=0.21.0",
 ]
 keywords = ["gpu", "ssh", "orchestration", "parallel", "wandb", "sweep", "distributed"]
 authors = [

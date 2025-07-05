@@ -39,4 +39,4 @@ slurm_cluster:
     partition: gpu
     time: '24:00:00'
 src_dir: /home/suchun/github/VectorTranslation
-sweep_file: ./sweep_config.yaml
+sweep_file: ./.jasminetool/sweep_config.yaml

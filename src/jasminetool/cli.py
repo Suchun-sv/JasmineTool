@@ -16,6 +16,7 @@ from .init import init_jasminetool
 from .project_init import init_project
 from .sync import sync_project
 from .config_display import display_config
+from .sweep import run_sweep, install_sweep_task
 from .version import __version__
 
 
@@ -32,6 +33,8 @@ Examples:
   jasminetool -t test_ubuntu config         # Display configuration for specific target
   jasminetool -t test_ubuntu init           # Initialize project for target
   jasminetool -t test_ubuntu sync           # Synchronize project for target
+  jasminetool sweep --config sweep.yaml     # Run wandb sweep with config file
+  jasminetool sweep --install               # Install wandb sweep command to VS Code tasks
   jasminetool local_gpu                      # Run on local GPU
   jasminetool remote_server --config ./my_config.yaml  # Run on remote server
   jasminetool slurm_cluster --skip-confirmation       # Submit to SLURM
@@ -42,7 +45,7 @@ Examples:
     parser.add_argument(
         "action",
         nargs="?",
-        help="Action to perform: 'init' (initialize config), 'config' (display config), 'sync' (sync project), target name (execute target), or use with -t flag"
+        help="Action to perform: 'init' (initialize config), 'config' (display config), 'sweep' (wandb sweep), 'sync' (sync project), target name (execute target), or use with -t flag"
     )
     
     parser.add_argument(
@@ -81,9 +84,15 @@ Examples:
     )
     
     parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Install wandb sweep command to VS Code tasks (for sweep command)"
+    )
+    
+    parser.add_argument(
         "--force",
         action="store_true",
-        help="Force initialization even if already initialized (for init command)"
+        help="Force overwrite existing tasks (for sweep --install command) or force initialization (for init command)"
     )
     
     return parser
@@ -145,7 +154,37 @@ def main(args: Optional[List[str]] = None) -> int:
                 traceback.print_exc()
             return 1
     
-    # Pattern 3: jasminetool -t target init (initialize project for target)
+    # Pattern 3: jasminetool sweep (wandb sweep operations)
+    elif action == "sweep" and not target:
+        if parsed_args.verbose:
+            if parsed_args.install:
+                print("Installing wandb sweep command to VS Code tasks...")
+            else:
+                print("Running wandb sweep...")
+        
+        try:
+            if parsed_args.install:
+                success = install_sweep_task(
+                    force=parsed_args.force,
+                    verbose=parsed_args.verbose
+                )
+            else:
+                success = run_sweep(
+                    config_path=parsed_args.config,
+                    verbose=parsed_args.verbose
+                )
+            return 0 if success else 1
+        except KeyboardInterrupt:
+            print("\nSweep operation cancelled by user", file=sys.stderr)
+            return 1
+        except Exception as e:
+            print(f"Sweep operation failed: {e}", file=sys.stderr)
+            if parsed_args.verbose:
+                import traceback
+                traceback.print_exc()
+            return 1
+    
+    # Pattern 4: jasminetool -t target init (initialize project for target)
     elif action == "init" and target:
         if parsed_args.verbose:
             print(f"Initializing project for target: {target}")
@@ -167,7 +206,7 @@ def main(args: Optional[List[str]] = None) -> int:
                 traceback.print_exc()
             return 1
     
-    # Pattern 4: jasminetool -t target sync (synchronize project for target)
+    # Pattern 5: jasminetool -t target sync (synchronize project for target)
     elif action == "sync" and target:
         if parsed_args.verbose:
             print(f"Synchronizing project for target: {target}")
@@ -189,7 +228,7 @@ def main(args: Optional[List[str]] = None) -> int:
                 traceback.print_exc()
             return 1
     
-    # Pattern 5: jasminetool target (execute target configuration)
+    # Pattern 6: jasminetool target (execute target configuration)
     elif action and not target:
         target_name = action  # action is actually the target name
         
@@ -231,13 +270,15 @@ def main(args: Optional[List[str]] = None) -> int:
                 traceback.print_exc()
             return 1
     
-    # Pattern 6: No action provided or invalid combination
+    # Pattern 7: No action provided or invalid combination
     else:
         print("Error: Action is required", file=sys.stderr)
         print("Usage:", file=sys.stderr)
         print("  jasminetool init                    # Initialize JasmineTool configuration", file=sys.stderr)
         print("  jasminetool config                  # Display configuration file", file=sys.stderr)
         print("  jasminetool -t target config        # Display configuration for specific target", file=sys.stderr)
+        print("  jasminetool sweep --config file.yaml # Run wandb sweep with config file", file=sys.stderr)
+        print("  jasminetool sweep --install         # Install wandb sweep command to VS Code tasks", file=sys.stderr)
         print("  jasminetool -t target init          # Initialize project for target", file=sys.stderr)
         print("  jasminetool -t target sync          # Synchronize project for target", file=sys.stderr)
         print("  jasminetool target                  # Execute target configuration", file=sys.stderr)

@@ -1,0 +1,47 @@
+method: grid
+metric:
+  goal: maximize
+  name: rsim_score
+name: test_rsim
+parameters:
+  rsim_sample_size:
+    values:
+    - 100
+    - 200
+    - 300
+    - 400
+    - 500
+    - 600
+    - 700
+    - 800
+    - 900
+    - 1000
+    - 1100
+    - 1200
+    - 1300
+    - 1400
+    - 1500
+    - 1600
+    - 1700
+    - 1800
+    - 1900
+    - 2000
+  test_dataset:
+    values:
+    - scifact
+    - nfcorpus
+    - arguana
+    - fiqa
+    - scidocs
+  model_name_1_model_name_2:
+    values:
+    - Fast-Text_NV-Embed
+    - Fast-Text_gpt3
+    - Fast-Text_gte
+    - NV-Embed_gpt3
+    - NV-Embed_gte
+    - gpt3_gte
+    - Mistral_gpt3
+  run_entity:
+    value: yangbn
+program: main_with_distribution_analysis.py

@@ -1,0 +1,104 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "nvitop",
+      "type": "shell",
+      "command": "python -m nvitop",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "wandb sweep",
+      "type": "shell",
+      "command": "(wandb sweep ${file} 2>&1) | tee ./.jasminetool/sweep_config.yaml",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "get wandb command",
+      "type": "shell",
+      "command": "cat wandb.latest | grep \"wandb agent\" | sed -e 's/^wandb: Run sweep agent with: //g'",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "apply buaa sqy",
+      "type": "shell",
+      "command": "bash ./tools/run_target.sh buaa_sqy",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "apply zp",
+      "type": "shell",
+      "command": "bash ./tools/run_target.sh zp",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "apply eidf local",
+      "type": "shell",
+      "command": "bash ./tools/run_target.sh local",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "apply 4090",
+      "type": "shell",
+      "command": "bash ./tools/run_target.sh 4090",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "apply eidf gpu",
+      "type": "shell",
+      "command": "bash ./tools/run_target.sh eidf_gpu",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "apply eidf gpu 2",
+      "type": "shell",
+      "command": "bash ./tools/run_target.sh eidf_gpu_2",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "get remote gpu config",
+      "type": "shell",
+      "command": "ssh buaa_sqy_jump 'cat ~/sshd/gpu_ssh.conf'"
+    },
+    {
+      "label": "apply buaa sqy gpu",
+      "type": "shell",
+      "command": "bash ./tools/run_target.sh buaa_sqy_gpu",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "apply buaa sqy gpu multi",
+      "type": "shell",
+      "command": "bash ./tools/run_target.sh buaa_sqy_gpu_multi",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "list available targets",
+      "type": "shell",
+      "command": "python3 ./tools/run_unified.py --help | grep -A 20 'Available targets' || echo 'Run: python3 ./tools/run_unified.py <invalid_target> to see available targets'",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "apply target (interactive)",
+      "type": "shell",
+      "command": "bash -c 'echo \"Available targets: local, zp, eidf_gpu, eidf_gpu_2, 4090, buaa_sqy, buaa_sqy_gpu, buaa_sqy_gpu_multi\" && read -p \"Enter target name: \" target && bash ./tools/run_target.sh \"$target\"'",
+      "group": "none",
+      "problemMatcher": []
+    }
+  ]
+}
