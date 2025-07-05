@@ -1,0 +1,92 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "JasmineTool: Debug start command",
+            "type": "python",
+            "request": "launch",
+            "module": "src.jasminetool.cli",
+            "args": [
+                "-t",
+                "test_ubuntu",
+                "start"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "JasmineTool: Debug start command (verbose)",
+            "type": "python",
+            "request": "launch",
+            "module": "src.jasminetool.cli",
+            "args": [
+                "-t",
+                "test_ubuntu",
+                "start",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "JasmineTool: Debug config display",
+            "type": "python",
+            "request": "launch",
+            "module": "src.jasminetool.cli",
+            "args": [
+                "-t",
+                "test_ubuntu",
+                "config",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "JasmineTool: Debug sync command",
+            "type": "python",
+            "request": "launch",
+            "module": "src.jasminetool.cli",
+            "args": [
+                "-t",
+                "test_ubuntu",
+                "sync",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "JasmineTool: Debug init command",
+            "type": "python",
+            "request": "launch",
+            "module": "src.jasminetool.cli",
+            "args": [
+                "init",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ]
+} 

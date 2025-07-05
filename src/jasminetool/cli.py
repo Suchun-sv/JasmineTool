@@ -8,6 +8,7 @@ This module provides the main entry point for the JasmineTool CLI.
 """
 
 import sys
+import os
 import argparse
 from typing import List, Optional
 
@@ -33,6 +34,7 @@ Examples:
   jasminetool -t test_ubuntu config         # Display configuration for specific target
   jasminetool -t test_ubuntu init           # Initialize project for target
   jasminetool -t test_ubuntu sync           # Synchronize project for target
+  jasminetool -t test_ubuntu start          # Start wandb agents in tmux sessions
   jasminetool sweep --config sweep.yaml     # Run wandb sweep with config file
   jasminetool sweep --install               # Install wandb sweep command to VS Code tasks
   jasminetool local_gpu                      # Run on local GPU
@@ -228,7 +230,30 @@ def main(args: Optional[List[str]] = None) -> int:
                 traceback.print_exc()
             return 1
     
-    # Pattern 6: jasminetool target (execute target configuration)
+    # Pattern 6: jasminetool -t target start (start wandb agents for target)
+    elif action == "start" and target:
+        if parsed_args.verbose:
+            print(f"Starting wandb agents for target: {target}")
+        
+        try:
+            from .start import start_wandb_agents
+            success = start_wandb_agents(
+                config_path=parsed_args.config,
+                target=target,
+                verbose=parsed_args.verbose
+            )
+            return 0 if success else 1
+        except KeyboardInterrupt:
+            print("\nStart operation cancelled by user", file=sys.stderr)
+            return 1
+        except Exception as e:
+            print(f"Start operation failed: {e}", file=sys.stderr)
+            if parsed_args.verbose:
+                import traceback
+                traceback.print_exc()
+            return 1
+    
+    # Pattern 7: jasminetool target (execute target configuration)
     elif action and not target:
         target_name = action  # action is actually the target name
         
@@ -270,7 +295,7 @@ def main(args: Optional[List[str]] = None) -> int:
                 traceback.print_exc()
             return 1
     
-    # Pattern 7: No action provided or invalid combination
+    # Pattern 8: No action provided or invalid combination
     else:
         print("Error: Action is required", file=sys.stderr)
         print("Usage:", file=sys.stderr)
@@ -281,6 +306,7 @@ def main(args: Optional[List[str]] = None) -> int:
         print("  jasminetool sweep --install         # Install wandb sweep command to VS Code tasks", file=sys.stderr)
         print("  jasminetool -t target init          # Initialize project for target", file=sys.stderr)
         print("  jasminetool -t target sync          # Synchronize project for target", file=sys.stderr)
+        print("  jasminetool -t target start         # Start wandb agents for target", file=sys.stderr)
         print("  jasminetool target                  # Execute target configuration", file=sys.stderr)
         print("  jasminetool --help                  # Show help", file=sys.stderr)
         return 1

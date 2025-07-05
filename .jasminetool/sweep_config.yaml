@@ -1,4 +1,4 @@
 wandb: Creating sweep from: /home/suchun/github/JasmineTool/wandb_config/test_rsim.yaml
-wandb: Creating sweep with ID: ciwmshft
-wandb: View sweep at: https://wandb.ai/yangbn/JasmineTool/sweeps/ciwmshft
-wandb: Run sweep agent with: wandb agent yangbn/JasmineTool/ciwmshft
+wandb: Creating sweep with ID: ppvm75ca
+wandb: View sweep at: https://wandb.ai/yangbn/JasmineTool/sweeps/ppvm75ca
+wandb: Run sweep agent with: wandb agent yangbn/JasmineTool/ppvm75ca
