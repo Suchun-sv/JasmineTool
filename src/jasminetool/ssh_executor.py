@@ -18,16 +18,17 @@ import shlex
 class SSHExecutor:
     """Execute commands on remote hosts via SSH"""
     
-    def __init__(self, ssh_host: str, work_dir: str, verbose: bool = False):
+    def __init__(self, ssh_host: str, ssh_port: int, work_dir: str, verbose: bool = False):
         """Initialize SSH executor"""
         self.ssh_host = ssh_host
+        self.ssh_port = ssh_port
         self.work_dir = work_dir
         self.verbose = verbose
     
     def test_connection(self) -> bool:
         """Test SSH connection to the remote host"""
         try:
-            cmd = f"ssh -o ConnectTimeout=5 -o BatchMode=yes {self.ssh_host} echo 'Connection test'"
+            cmd = f"ssh -p {self.ssh_port} -o ConnectTimeout=5 -o BatchMode=yes {self.ssh_host} echo 'Connection test'"
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             
             if result.returncode == 0:
@@ -290,6 +291,7 @@ class RemoteTargetExecutor:
         
         # Extract SSH and directory information
         self.ssh_host = target_config.get('ssh_host', '')
+        self.ssh_port = target_config.get('ssh_port', 22)
         self.work_dir = target_config.get('work_dir', '')
         
         if not self.ssh_host:
