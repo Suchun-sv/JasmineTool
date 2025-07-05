@@ -602,86 +602,95 @@ def create_tmux_session_remote(remote_executor: RemoteTargetExecutor, sweep_id: 
     if command_runner.startswith("uv run"):
         command_runner = command_runner.replace("uv run", f"{uv_cmd} run")
     
-    # Create session name and set up GPU configuration in a single command
-    print("📝 Creating session name and setting up environment...")
-    
+    # Step 1: Check if nvidia-smi exists and get GPU configuration
+    print("📝 Checking GPU configuration...")
     if gpu_config == "0":
-        gpu_setup = """
-# Check if nvidia-smi exists
-if command -v nvidia-smi >/dev/null 2>&1; then
-    GPU_COUNT=$(nvidia-smi --query-gpu=count --format=csv,noheader | wc -l)
-    if [ $? -eq 0 ] && [ "$GPU_COUNT" -gt 0 ]; then
-        GPU_IDS=$(seq 0 $((GPU_COUNT-1)) | tr "\\n" "," | sed "s/,$//")"
-        echo "🖥️  Detected GPUs: $GPU_IDS"
-    else
-        GPU_IDS="0"
-        echo "⚠️  nvidia-smi failed, using default GPU: $GPU_IDS"
-    fi
-else
-    GPU_IDS="0"
-    echo "⚠️  nvidia-smi not found (no GPU or driver not installed), using CPU-only mode: $GPU_IDS"
-fi
-"""
+        # Check if nvidia-smi exists
+        result = remote_executor.ssh.execute_command("command -v nvidia-smi", capture_output=True)
+        if result.returncode == 0:
+            print("🖥️  nvidia-smi found, detecting GPUs...")
+            # Get GPU count
+            result = remote_executor.ssh.execute_command("nvidia-smi --query-gpu=count --format=csv,noheader | wc -l", capture_output=True)
+            if result.returncode == 0:
+                try:
+                    num_gpus = int(result.stdout.strip())
+                    if num_gpus > 0:
+                        gpu_ids = ",".join([str(i) for i in range(num_gpus)])
+                        print(f"🖥️  Detected {num_gpus} GPU(s): {gpu_ids}")
+                    else:
+                        gpu_ids = "0"
+                        print("⚠️  No GPUs detected, using default: 0")
+                except ValueError:
+                    gpu_ids = "0"
+                    print("⚠️  Failed to parse GPU count, using default: 0")
+            else:
+                gpu_ids = "0"
+                print("⚠️  nvidia-smi failed, using default: 0")
+        else:
+            gpu_ids = "0"
+            print("⚠️  nvidia-smi not found, using CPU-only mode: 0")
     else:
-        gpu_setup = f"""
-GPU_IDS="{gpu_config}"
-echo "🖥️  Using configured GPUs: $GPU_IDS"
-"""
+        gpu_ids = gpu_config
+        print(f"🖥️  Using configured GPUs: {gpu_ids}")
     
-    # Combine all setup commands into a single script with proper environment
-    setup_script = f"""
-set -e
-export TERM=xterm-256color FORCE_COLOR=1
-
-SWEEP_ID_SHORT=$(echo "{sweep_id}" | rev | cut -d"/" -f1 | rev)
-CURRENT_TIME=$(date +"%m%d%H%M")
-SESSION_NAME="${{SWEEP_ID_SHORT}}_${{CURRENT_TIME}}"
-echo "Session name: $SESSION_NAME"
-
-{gpu_setup}
-
-# Create tmux session
-echo "🔧 Creating tmux session..."
-tmux new-session -d -s "$SESSION_NAME"
-
-# Add processes for each GPU
-echo "🔧 Adding processes to tmux session..."
-FIRST_PANE=true
-IFS="," read -ra GPUS <<< "$GPU_IDS"
-for gpu_id in "${{GPUS[@]}}"; do
-    for ((i=0; i<{num_processes}; i++)); do
-        if [ "$FIRST_PANE" = true ]; then
-            FIRST_PANE=false
-        else
-            tmux split-window -t "$SESSION_NAME"
-            tmux select-layout -t "$SESSION_NAME" tiled
-        fi
-        
-        WANDB_CMD="wandb agent {sweep_id}"
-        # Only set CUDA_VISIBLE_DEVICES if nvidia-smi exists
-        if command -v nvidia-smi >/dev/null 2>&1; then
-            FULL_CMD="export WANDB_API_KEY={wandb_key} && CUDA_VISIBLE_DEVICES=$gpu_id {command_runner} $WANDB_CMD"
-        else
-            FULL_CMD="export WANDB_API_KEY={wandb_key} && {command_runner} $WANDB_CMD"
-        fi
-        tmux send-keys -t "$SESSION_NAME" "$FULL_CMD" C-m
-        
-        echo "✅ Started process $((i+1)) on GPU $gpu_id"
-    done
-done
-
-echo "🎉 All processes started successfully!"
-echo "🚀 All processes started in tmux session: $SESSION_NAME"
-echo "   View session: tmux attach-session -t $SESSION_NAME"
-echo "   Kill session: tmux kill-session -t $SESSION_NAME"
-"""
+    # Step 2: Create session name
+    sweep_id_short = sweep_id.split('/')[-1] if '/' in sweep_id else sweep_id
+    import time
+    current_time = time.strftime("%m%d%H%M")
+    session_name = f"{sweep_id_short}_{current_time}"
+    print(f"📝 Session name: {session_name}")
     
-    result = remote_executor.ssh.execute_command(setup_script, stream_output=True, force_pty=True)
+    # Step 3: Create tmux session
+    print("🔧 Creating tmux session...")
+    result = remote_executor.ssh.execute_command(f"tmux new-session -d -s {session_name}", capture_output=True)
     if result.returncode != 0:
-        print("✗ Failed to create tmux session and setup processes")
+        print("✗ Failed to create tmux session")
         return False
     
-    print("✅ Tmux session created successfully")
+    # Step 4: Add processes to tmux session
+    print("🔧 Adding processes to tmux session...")
+    gpu_list = [g.strip() for g in gpu_ids.split(",")]
+    first_pane = True
+    
+    # Check if we have nvidia-smi for environment variable setting
+    has_nvidia_result = remote_executor.ssh.execute_command("command -v nvidia-smi", capture_output=True)
+    has_nvidia = (has_nvidia_result.returncode == 0)
+    
+    for gpu_id in gpu_list:
+        for i in range(num_processes):
+            if not first_pane:
+                # Split window
+                result = remote_executor.ssh.execute_command(f"tmux split-window -t {session_name}", capture_output=True)
+                if result.returncode != 0:
+                    print(f"⚠️  Failed to split window, continuing...")
+                
+                # Arrange layout
+                result = remote_executor.ssh.execute_command(f"tmux select-layout -t {session_name} tiled", capture_output=True)
+            
+            # Build command
+            wandb_cmd = f"wandb agent {sweep_id}"
+            if has_nvidia:
+                full_cmd = f"export WANDB_API_KEY={wandb_key} && CUDA_VISIBLE_DEVICES={gpu_id} {command_runner} {wandb_cmd}"
+            else:
+                full_cmd = f"export WANDB_API_KEY={wandb_key} && {command_runner} {wandb_cmd}"
+            
+            # Send command to pane
+            result = remote_executor.ssh.execute_command(f'tmux send-keys -t {session_name} "{full_cmd}" C-m', capture_output=True)
+            if result.returncode == 0:
+                if has_nvidia:
+                    print(f"✅ Started process {i+1} on GPU {gpu_id}")
+                else:
+                    print(f"✅ Started process {i+1} (CPU mode)")
+            else:
+                print(f"⚠️  Failed to start process {i+1}")
+            
+            first_pane = False
+    
+    print("🎉 All processes started successfully!")
+    print(f"🚀 Tmux session created: {session_name}")
+    print(f"   View session: tmux attach-session -t {session_name}")
+    print(f"   Kill session: tmux kill-session -t {session_name}")
+    
     return True
 
 
