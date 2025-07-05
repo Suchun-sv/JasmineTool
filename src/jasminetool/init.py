@@ -120,56 +120,56 @@ local_config.yaml
             "# JasmineTool Configuration": None,
             "# This is the default configuration created by 'jasminetool init'": None,
             "# Modify this file to suit your needs": None,
+            # Example server configurations
+            "server_1": {
+                "mode": "remote",
+                "gpu_config": "0",
+                "num_processes": 4,
+                "ssh_host": "user@server1.example.com",
+                "work_dir": "/path/to/project",
+                "github_url": "git@github.com:user/repo.git",
+                "dvc_remote": "s3://bucket/path/",
+                "dvc_cache": "/home/user/.cache/dvc/project"
+            },
+            "server_2": {
+                "mode": "remote",
+                "gpu_config": "0",
+                "num_processes": 4,
+                "ssh_host": "user@server2.example.com",
+                "work_dir": "/path/to/project",
+                "github_url": "git@github.com:user/repo.git",
+                "dvc_cache": "/path/to/cache/",
+                "dvc_remote": "s3://bucket/path/"
+            },
+            
+            "server_3": {
+                "mode": "remote",
+                "gpu_config": "0",
+                "num_processes": 4,
+                "ssh_host": "user@server3.example.com",
+                "ssh_port": 22,
+                "work_dir": "/path/to/project",
+                "github_url": "git@github.com:user/repo.git",
+                "dvc_cache": "/path/to/cache/",
+                "dvc_remote": "s3://bucket/path/"
+            },
+            
+            "server_4": {
+                "mode": "remote",
+                "gpu_config": "0",
+                "num_processes": 4,
+                "ssh_host": "user@server4.example.com",
+                "ssh_port": 22,
+                "work_dir": "/path/to/project",
+                "github_url": "git@github.com:user/repo.git",
+                "dvc_cache": "/path/to/cache/",
+                "dvc_remote": "s3://bucket/path/"
+            },
             
             # Global settings
-            "sweep_file": "./.jasminetool/sweep_config.yaml",
-            "pattern": "wandb agent",
-            "src_dir": str(self.base_dir),  # Record current directory as source directory
-            
-            # Local GPU execution
-            "local_gpu": {
-                "mode": "local",
-                "gpu_config": "0",
-                "num_processes": 1,
-            },
-            
-            # Remote execution example
-            "remote_server": {
-                "mode": "remote",
-                "ssh_host": "user@remote-server.com",
-                "work_dir": "/path/to/project",
-                "gpu_config": "0",
-                "num_processes": 1,
-                "sync_method": "git",
-                "git_operations": [
-                    "git fetch origin",
-                    "git checkout {branch}",
-                    "git pull origin {branch}",
-                ]
-            },
-            
-            # SLURM execution example
-            "slurm_cluster": {
-                "mode": "slurm",
-                "gpu_config": "0",
-                "num_processes": 1,
-                "slurm_config": {
-                    "job-name": "jasmine-sweep",
-                    "time": "24:00:00",
-                    "nodes": 1,
-                    "ntasks-per-node": 1,
-                    "gres": "gpu:1",
-                    "partition": "gpu",
-                }
-            },
-            
-            # Pre-commands (optional)
-            "pre_commands": [
-                {
-                    "command": "echo 'Starting JasmineTool execution'",
-                    "working_dir": "."
-                }
-            ]
+            "src_dir": str(self.base_dir),
+            "sweep_file": "sweep_config.yaml",
+            "wandb_key": ""
         }
     
     def initialize(self, force: bool = False, verbose: bool = False) -> bool:
