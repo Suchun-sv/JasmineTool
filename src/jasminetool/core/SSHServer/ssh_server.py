@@ -4,12 +4,15 @@ from fabric import Connection, Config
 from fabric.transfer import Transfer
 from paramiko import RSAKey
 from invoke.exceptions import UnexpectedExit
+from rich.prompt import Confirm
 from loguru import logger
+from .project_init import ProjectInitializer
 
 class SSHServer(Server):
     def __init__(self, gloabl_config: JasmineConfig, server_config: RemoteSSHConfig):
         super().__init__(server_config)
         self.gloabl_config = gloabl_config
+        self.server_config = server_config
         self.connection = self._build_connection(server_config)
 
     def _build_connection(self, config: RemoteSSHConfig) -> Connection:
@@ -34,12 +37,8 @@ class SSHServer(Server):
         )
         return conn
 
-    def _init(self):
-        try:
-            result = self.connection.run("uname -a", hide=True)
-            logger.info(f"[{self.config.name}] Connected: {result.stdout.strip()}")
-        except UnexpectedExit as e:
-            logger.error(f"Connection failed: {e}")
+    def _init(self, force: bool = False):
+        ProjectInitializer(self.gloabl_config, self.connection, self.server_config).run(force)
 
     def _test(self) -> bool:
         try:
@@ -49,6 +48,7 @@ class SSHServer(Server):
             logger.error(f"[{self.config.name}] Connection failed: {e}")
             return False
         return True
+
     def _sync(self):
         # Example: push local files to remote
         pass
@@ -63,4 +63,10 @@ class SSHServer(Server):
 
     def _remove(self):
         # Example: delete temp folder
-        self.connection.run("rm -rf ~/remote_dir/")
+        logger.info(f"[{self.config.name}] Removing work dir: {self.server_config.work_dir}")
+        # It is a dangerous operation, so we need to confirm
+        confirm = Confirm.ask(f"Are you sure you want to remove [bold red] [{self.config.name}]:{self.server_config.work_dir}[/bold red]?")
+        if not confirm:
+            logger.info(f"[{self.config.name}] Skipping work dir removal")
+            return
+        self.connection.run(f"rm -rf {self.server_config.work_dir}")

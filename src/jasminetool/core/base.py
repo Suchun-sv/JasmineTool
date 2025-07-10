@@ -6,7 +6,7 @@ class Server(ABC):
         self.config = config
 
     @abstractmethod
-    def _init(self):
+    def _init(self, force: bool = False):
         pass
 
     @abstractmethod
@@ -29,8 +29,8 @@ class Server(ABC):
     def _remove(self):
         pass
 
-    def init(self):
-        self._init()
+    def init(self, force: bool = False):
+        self._init(force)
     
     def test(self) -> bool:
         return self._test()

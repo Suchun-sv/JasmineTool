@@ -60,16 +60,14 @@ def init_target(
     name: str = typer.Option(None, "--name", "-n", help="Name of the target"),
     config_path: str = typer.Option(".jasminetool/config.yaml", "--path", "-p", help="Path to the config file"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive mode"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force mode"),
 ):
     """
     Initialize a target server, please specify the name of the target
     """
     config = _init_config(config_path)
-    if interactive:
-        name = interactive_select_server_name(config)
-    _check_name(name, config)
-    server = load_server(name, config)
-    server.init()
+    server, name = _common_check_and_return_server(config, name, interactive)
+    server.init(force=force)
 
 @target_app.command(name="check")
 def check_target(
