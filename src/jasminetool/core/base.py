@@ -10,7 +10,7 @@ class Server(ABC):
         pass
 
     @abstractmethod
-    def _test(self):
+    def _test(self) -> bool:
         pass
 
     @abstractmethod
@@ -32,8 +32,8 @@ class Server(ABC):
     def init(self):
         self._init()
     
-    def test(self):
-        self._test()
+    def test(self) -> bool:
+        return self._test()
     
     def sync(self):
         self._sync()

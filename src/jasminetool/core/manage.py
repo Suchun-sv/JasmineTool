@@ -1,7 +1,8 @@
 from jasminetool.config import JasmineConfig, RemoteSSHConfig, RemoteK8sConfig
 from jasminetool.core.SSHServer import SSHServer
+from jasminetool.core import Server
 
-def load_server(name: str, global_config: JasmineConfig):
+def load_server(name: str, global_config: JasmineConfig) -> Server:
     server_config = global_config.load_server_config(name)
     if server_config.mode == "remote_ssh":
         if not isinstance(server_config, RemoteSSHConfig):

@@ -19,9 +19,10 @@ class BaseConfig:
 class RemoteSSHConfig(BaseConfig):
     user_name: str
     server_ip: str
-    server_port: int
+    private_key_path: str = field(default_factory=lambda: os.path.expanduser("~/.ssh/id_rsa"))
 
     # Optional: proxy jump (e.g., bastion host)
+    server_port: Optional[int] = None
     proxy_user: Optional[str] = None
     proxy_ip: Optional[str] = None
     proxy_port: Optional[int] = 22
