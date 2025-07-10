@@ -20,6 +20,7 @@ class RemoteSSHConfig(BaseConfig):
     user_name: str
     server_ip: str
     private_key_path: str = field(default_factory=lambda: os.path.expanduser("~/.ssh/id_rsa"))
+    command_runner: str = field(default_factory=lambda: "uv run")
 
     # Optional: proxy jump (e.g., bastion host)
     server_port: Optional[int] = None
