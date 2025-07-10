@@ -16,6 +16,8 @@ from typing_extensions import Annotated
 
 from .init import init_jasminetool
 from .target import target_app
+from .install import install_app
+from .sweep import sweep_app
 
 # Main Typer application
 app = typer.Typer(
@@ -28,6 +30,8 @@ app = typer.Typer(
 
 app.command(name="init")(init_jasminetool)
 app.add_typer(target_app, name="target")
+app.add_typer(install_app, name="install", help="Install useful tasks to the VS Code tasks.json")
+app.add_typer(sweep_app, name="sweep", help="Wrapper for WandB Sweep commands")
 
 def main():
     """Main entry point for the CLI."""
