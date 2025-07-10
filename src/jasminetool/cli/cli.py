@@ -12,14 +12,14 @@ import os
 import argparse
 from typing import List, Optional
 
-from .unified_runner import UnifiedTaskRunner
-from .init import init_jasminetool
-from .project_init import init_project
-from .sync import sync_project
-from .config_display import display_config
-from .sweep import run_sweep, install_sweep_task
-from .install import install_target_tasks
-from .version import __version__
+from jasminetool.unified_runner import UnifiedTaskRunner
+from jasminetool.init import init_jasminetool
+from jasminetool.project_init import init_project
+from jasminetool.sync import sync_project
+from jasminetool.config_display import display_config
+from jasminetool.sweep import run_sweep, install_sweep_task
+from jasminetool.install import install_target_tasks
+from jasminetool.version import __version__
 
 
 def create_parser() -> argparse.ArgumentParser:

@@ -5,6 +5,7 @@
 sweep_file: "./sweep_config.yaml"
 pattern: "wandb agent"
 
+server_config:
 test_ubuntu:
   mode: "remote"
   ssh_host: "suchun@127.0.0.1"
