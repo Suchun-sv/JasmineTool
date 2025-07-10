@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict
 from fabric import Connection
 from loguru import logger
+import subprocess
 from jasminetool.config import RemoteSSHConfig, JasmineConfig
 
 class ProjectSync:
@@ -30,6 +31,7 @@ class ProjectSync:
         # check if the git urls match
         if not self._check_git_urls_match(): return False
         if not self._check_git_clean(): return False
+        if not self._check_dvc_clean(): return False
 
         # get the current branch
         branch = self._get_current_branch()
@@ -49,6 +51,15 @@ class ProjectSync:
 
         logger.info(f"[{self.server.name}] 🎉 Sync completed successfully on branch {branch}")
         return True
+    
+    def _check_dvc_clean(self) -> bool:
+        res = subprocess.run(f"cd {self.work_dir} && uv run dvc status", shell=True, capture_output=True)
+        logger.info(f"[{self.server.name}] 📍 DVC status:\n{res.stdout}")
+        if res.stdout.strip():
+            logger.error(f"[{self.server.name}] ✗ DVC repo not clean:\n{res.stdout}")
+            return False
+        logger.info(f"[{self.server.name}] ✓ DVC repo is clean")
+        return True
 
     def _check_git_urls_match(self) -> bool:
         # 获取源库和目标库 URL 并比较，可复用你已有逻辑
@@ -56,7 +67,12 @@ class ProjectSync:
         return True
 
     def _check_git_clean(self) -> bool:
-        res = self.conn.run(self._with_env(f"cd {self.src_dir} && git status --porcelain"), hide=True, warn=True)
+        # res = self.conn.run(self._with_env(f"cd {self.src_dir} && git status --porcelain"), hide=True, warn=True)
+        # if res.stdout.strip():
+        #     logger.error(f"[{self.server.name}] ✗ Source repo not clean:\n{res.stdout}")
+        #     return False
+        # logger.info(f"[{self.server.name}] ✓ Source repo is clean")
+        res = subprocess.run(f"cd {self.src_dir} && git status --porcelain", shell=True, capture_output=True)
         if res.stdout.strip():
             logger.error(f"[{self.server.name}] ✗ Source repo not clean:\n{res.stdout}")
             return False
@@ -64,13 +80,14 @@ class ProjectSync:
         return True
 
     def _get_current_branch(self) -> str | None:
-        res = self.conn.run(self._with_env(f"cd {self.src_dir} && git rev-parse --abbrev-ref HEAD"),
-                            hide=True, warn=True)
-        if not res.ok:
-            logger.error(f"[{self.server.name}] ✗ Failed to get branch")
-            return None
-        branch = res.stdout.strip()
-        logger.info(f"[{self.server.name}] 📍 Current branch: {branch}")
+        # res = self.conn.run(f"cd {self.src_dir} && git rev-parse --abbrev-ref HEAD",
+        #                     hide=False, warn=True)
+        # if not res.ok:
+        #     logger.error(f"[{self.server.name}] ✗ Failed to get branch")
+        #     return None
+        # branch = res.stdout.strip()
+        # logger.info(f"[{self.server.name}] 📍 Current branch: {branch}")
+        branch = subprocess.run(f"cd {self.src_dir} && git rev-parse --abbrev-ref HEAD", shell=True, capture_output=True).stdout.decode('utf-8').strip()
         return branch
 
     def _ensure_work_dir(self) -> bool:
