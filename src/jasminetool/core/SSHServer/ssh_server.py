@@ -7,6 +7,8 @@ from invoke.exceptions import UnexpectedExit
 from rich.prompt import Confirm
 from loguru import logger
 from .project_init import ProjectInitializer
+from .project_sync import ProjectSync
+from .project_start import ProjectStarter
 
 class SSHServer(Server):
     def __init__(self, gloabl_config: JasmineConfig, server_config: RemoteSSHConfig):
@@ -49,13 +51,24 @@ class SSHServer(Server):
             return False
         return True
 
-    def _sync(self):
-        # Example: push local files to remote
-        pass
+    def _check_path(self, path: str) -> bool:
+        try:
+            result = self.connection.run(f"ls {path}", hide=True)
+            return result.ok
+        except Exception as e:
+            logger.error(f"[{self.config.name}] Failed to check path: {e}")
+            return False
 
-    def _start(self):
-        # Example: run script
-        self.connection.run("bash ~/remote_dir/start.sh")
+    def _sync(self):
+        ProjectSync(self.connection, self.server_config, self.gloabl_config).run()
+
+    def _start(self, sweep_id: str, gpu_config: str, num_processes: int, wandb_key: str):
+        ProjectStarter(self.gloabl_config, self.connection, self.server_config).run(
+            sweep_id=sweep_id,
+            gpu_config=gpu_config,
+            num_processes=num_processes,
+            wandb_key=wandb_key,
+        )
 
     def _install(self):
         # Example: install packages

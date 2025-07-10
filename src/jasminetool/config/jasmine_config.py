@@ -21,6 +21,8 @@ class RemoteSSHConfig(BaseConfig):
     server_ip: str
     private_key_path: str = field(default_factory=lambda: os.path.expanduser("~/.ssh/id_rsa"))
     command_runner: str = field(default_factory=lambda: "uv run")
+    num_processes: int = field(default_factory=lambda: 4)
+    gpu_config: Optional[str] = field(default_factory=lambda: "0")
 
     # Optional: proxy jump (e.g., bastion host)
     server_port: Optional[int] = None
@@ -44,12 +46,12 @@ def _init_example_remote_ssh_config() -> RemoteSSHConfig:
         name="Bunny",
         user_name="$USER",
         server_ip="SERVER_IP",
-        server_port=22,
+        server_port=None,
         mode="remote_ssh",
         github_url="https://github.com/Suchun-sv/JasmineTool.git",
-        work_dir="/home/$USER/github/JasmineToolLocal",
-        dvc_cache="/home/$USER/.cache/JasmineTool",
-        dvc_remote="s3://cache/JasmineTool/",
+        work_dir="$HOME/github/JasmineToolLocal",
+        dvc_cache="$HOME/.cache/JasmineTool",
+        dvc_remote="None",
     )
 
 def _init_example_remote_k8s_config() -> RemoteK8sConfig:
@@ -69,6 +71,8 @@ class JasmineConfig:
     sweep_file_path: str = "./.jasminetool/sweep_config.yaml"
     src_dir: str = field(default_factory=os.getcwd)
     server_config_list: List[Union[RemoteSSHConfig, RemoteK8sConfig]] = field(default_factory=lambda: [_init_example_remote_ssh_config(), _init_example_remote_k8s_config()])
+    wandb_key: Optional[str] = field(default_factory=lambda: os.getenv("WANDB_API_KEY"))
+    wandb_project: Optional[str] = field(default_factory=lambda: os.path.basename(os.getcwd()))
 
     def load_server_config(self, name: str) -> Union[RemoteSSHConfig, RemoteK8sConfig]:
         for server in self.server_config_list:

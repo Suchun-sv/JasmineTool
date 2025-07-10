@@ -1,15 +1,28 @@
+from pygments.lexer import default
 import typer
 from jasminetool.config import JasmineConfig, load_config
 from jasminetool.core import load_server
 from typing import List, Union, Optional, Tuple
+from jasminetool.core import SSHServer
+import select
+import sys
 
-from jasminetool.cli.util import interactive_select_server_name, get_server_name_list
+from jasminetool.cli.util import interactive_select_server_name, get_server_name_list, parse_sweep_id
 from jasminetool.core import Server
 
 import rich
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
+
+def _prompt_with_timeout(prompt: str, timeout: int) -> Optional[str]:
+    rich.print(prompt, end="", flush=True)
+    rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+    if rlist:
+        return sys.stdin.readline().strip()
+    else:
+        rich.print()  # for a new line after timeout
+        return None
 
 target_app = typer.Typer(
     name="target",
@@ -86,15 +99,19 @@ def check_target(
     table.add_column("Name", justify="left", style="cyan", no_wrap=True)
     table.add_column("Mode", justify="left", style="green")
     table.add_column("Status", justify="center")
+    table.add_column("Path", justify="center")
 
     for server, name in zip(server_list, name_list):
         status = server.test()
         status_text = Text("✅ SUCCESS", style="green") if status else Text("❌ FAILED", style="red")
+
+        path_status = server.check_path(server.config.work_dir)
+        path_status_text = Text("✅ SUCCESS", style="green") if path_status else Text("❌ FAILED", style="red")
         
         # Assuming server object has a config attribute holding its specific config
         mode = server.config.mode if hasattr(server, 'config') and hasattr(server.config, 'mode') else "N/A"
         
-        table.add_row(name, mode, status_text)
+        table.add_row(name, mode, status_text, path_status_text)
 
     rich.print(table)
 
@@ -130,6 +147,7 @@ def sync_target(
 def start_target(
     name: str = typer.Option(..., "--name", "-n", help="Name of the target"),
     config_path: str = typer.Option(".jasminetool/config.yaml", "--path", "-p", help="Path to the config file"),
+    interactive: bool = typer.Option(True, "--interactive", "-i", help="Interactive mode for gpu_config and num_processes"),
 ):
     """
     Start the target server, please specify the name of the target
@@ -137,4 +155,44 @@ def start_target(
     config = _init_config(config_path)
     _check_name(name, config)
     server = load_server(name, config)
-    server.start()
+    sweep_id = parse_sweep_id(config)
+
+    if server.config.mode == "remote_ssh" and isinstance(server, SSHServer):
+        gpu_config = server.server_config.gpu_config
+        num_processes = server.server_config.num_processes
+        wandb_key = server.gloabl_config.wandb_key
+
+        if interactive:
+            rich.print(Panel(
+                Text("Entering interactive mode. You have 3 seconds for each prompt.\nPress Enter to use the default value.", justify="center"),
+                title="[bold blue]Interactive Configuration[/bold blue]",
+                border_style="blue"
+            ))
+
+            # Prompt for gpu_config
+            user_gpu_config = _prompt_with_timeout(f"Enter GPU config (default: [green]{gpu_config}[/green]): ", 3)
+            
+            if user_gpu_config is None:
+                rich.print(f"Timeout. Using default GPU config: [yellow]{gpu_config}[/yellow]")
+            elif user_gpu_config == "":
+                rich.print(f"Empty input. Using default GPU config: [yellow]{gpu_config}[/yellow]")
+            else:
+                gpu_config = user_gpu_config
+
+            # Prompt for num_processes
+            user_num_processes = _prompt_with_timeout(f"Enter number of processes (default: [green]{num_processes}[/green]): ", 3)
+
+            if user_num_processes is None:
+                rich.print(f"Timeout. Using default number of processes: [yellow]{num_processes}[/yellow]")
+            elif user_num_processes == "":
+                rich.print(f"Empty input. Using default number of processes: [yellow]{num_processes}[/yellow]")
+            else:
+                try:
+                    num_processes = int(user_num_processes)
+                except ValueError:
+                    rich.print(f"[red]Invalid input. Expected an integer.[/red] Using default number of processes: [yellow]{server.server_config.num_processes}[/yellow]")
+                    num_processes = server.server_config.num_processes
+        
+        server.start(sweep_id=sweep_id, gpu_config=gpu_config, num_processes=num_processes, wandb_key=wandb_key)
+    else:
+        raise ValueError(f"Unsupported server Mode: {server.config.mode}")

@@ -1,6 +1,7 @@
 from rich import print
 from rich.prompt import Prompt
 from rich.table import Table
+from pathlib import Path
 from jasminetool.config import JasmineConfig, BaseConfig
 from typing import List
 
@@ -30,3 +31,20 @@ def get_server_list(config: JasmineConfig) -> List[BaseConfig]:
 
 def get_server_name_list(config: JasmineConfig) -> List[str]:
     return [server.name for server in config.server_config_list]
+
+def parse_sweep_id(config: JasmineConfig) -> str:
+    sweep_file_path = Path(config.sweep_file_path)
+    if not sweep_file_path.exists():
+        raise ValueError(f"Sweep file not found: {sweep_file_path}")
+
+    with open(sweep_file_path, "r") as f:
+        content = f.read()
+
+    lines = content.strip().split('\n')
+    for line in lines:
+        if 'wandb agent' in line and 'Run sweep agent with:' in line:
+            parts = line.split('wandb agent')
+            if len(parts) > 1:
+                sweep_id = parts[-1].strip()
+                return sweep_id
+    raise ValueError(f"No sweep ID found in the sweep file: {config.sweep_file_path}")

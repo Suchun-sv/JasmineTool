@@ -35,11 +35,17 @@ class Server(ABC):
     def test(self) -> bool:
         return self._test()
     
+    def check_path(self, path: str) -> bool:
+        return self._check_path(path)
+    
+    def _check_path(self, path: str) -> bool:
+        return False
+    
     def sync(self):
         self._sync()
     
-    def start(self):
-        self._start()
+    def start(self, **kwargs):
+        self._start(**kwargs)
     
     def install(self):
         self._install()
