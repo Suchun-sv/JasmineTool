@@ -31,41 +31,41 @@ class ProjectInitializer:
         if not self._setup_environment():
             return False
 
-        print("\n🎉 Initialization complete!")
+        logger.info(f"[{self.server_config.name}] 🎉 Initialization complete!")
         return True
     
     def _check_and_install_x_cmd(self) -> bool:
         logger.info("🔧 Checking x-cmd...")
         result = self.conn.run(self._with_uv_xcmd_env("command -v x-cmd"), warn=True, hide=True)
         if result.ok:
-            print("✓ x-cmd is already installed")
+            logger.info(f"[{self.server_config.name}] ✓ x-cmd is already installed")
             return True
 
-        print("⚠ x-cmd not found. Installing...")
+        logger.warning(f"[{self.server_config.name}] ⚠ x-cmd not found. Installing...")
         install_cmd = self._with_uv_xcmd_env('eval "$(curl https://get.x-cmd.com)"')
         result = self.conn.run(install_cmd, pty=True)
         if result.ok:
-            print("✓ x-cmd installed successfully")
+            logger.info(f"[{self.server_config.name}] ✓ x-cmd installed successfully")
             return True
         else:
-            print("✗ Failed to install x-cmd")
+            logger.error(f"[{self.server_config.name}] ✗ Failed to install x-cmd")
             return False
         
     def _check_and_install_uv(self) -> bool:
-        print("\n🔧 Checking uv...")
+        logger.info(f"[{self.server_config.name}] 🔧 Checking uv...")
         result = self.conn.run(self._with_uv_xcmd_env("command -v uv"), warn=True, hide=True)
         if result.ok:
-            print("✓ uv is already installed")
+            logger.info(f"[{self.server_config.name}] ✓ uv is already installed")
             return True
         
-        print("⚠ uv not found. Installing...")
+        logger.warning(f"[{self.server_config.name}] ⚠ uv not found. Installing...")
         install_cmd = self._with_uv_xcmd_env('curl -LsSf https://astral.sh/uv/install.sh | sh')
         result = self.conn.run(install_cmd, pty=True)
         if result.ok:
-            print("✓ uv installed successfully")
+            logger.info(f"[{self.server_config.name}] ✓ uv installed successfully")
             return True
         else:
-            print("✗ Failed to install uv")
+            logger.error(f"[{self.server_config.name}] ✗ Failed to install uv")
             return False
     
     def _clone_repo(self, force: bool = False) -> bool:
@@ -94,7 +94,7 @@ class ProjectInitializer:
             return False
     
     def _setup_environment(self) -> bool:
-        print("\n🔧 Setting up Python environment...")
+        logger.info(f"[{self.server_config.name}] 🔧 Setting up Python environment...")
         result = self.conn.run(self._with_uv_xcmd_env(f"cd {self.server_config.work_dir} && uv venv"), pty=True)
         if not result.ok:
             logger.error("✗ Failed to setup Python environment")
@@ -105,5 +105,5 @@ class ProjectInitializer:
             logger.error("✗ Failed to sync Python environment")
             return False
 
-        logger.info("✓ Python environment setup successfully")
+        logger.info(f"[{self.server_config.name}] ✓ Python environment setup successfully")
         return True

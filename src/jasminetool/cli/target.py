@@ -34,7 +34,7 @@ def _common_check_and_return_server(config: JasmineConfig, name: Optional[str], 
     if interactive and name is None:
         name = interactive_select_server_name(config)
     if name is None:
-        raise ValueError("Name is required")
+        raise ValueError("Name is required, use --interactive (-i) to select a target")
     _check_name(name, config)
     server = load_server(name, config)
     return server, name
@@ -59,7 +59,7 @@ def _common_check_and_return_server_list(config: JasmineConfig, name: Optional[s
 def init_target(
     name: str = typer.Option(None, "--name", "-n", help="Name of the target"),
     config_path: str = typer.Option(".jasminetool/config.yaml", "--path", "-p", help="Path to the config file"),
-    interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive mode"),
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive select target by name"),
     force: bool = typer.Option(False, "--force", "-f", help="Force mode"),
 ):
     """
@@ -73,7 +73,7 @@ def init_target(
 def check_target(
     name: str = typer.Option("all", "--name", "-n", help="Name of the target, this command provide `all` as default value"),
     config_path: str = typer.Option(".jasminetool/config.yaml", "--path", "-p", help="Path to the config file"),
-    interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive mode"),
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive select target by name"),
 ):
     """
     Test the target server, please specify the name of the target
@@ -97,6 +97,20 @@ def check_target(
         table.add_row(name, mode, status_text)
 
     rich.print(table)
+
+# remove the target server
+@target_app.command(name="remove", help="Remove the target server word dir")
+def remove_target(
+    name: str = typer.Option(None, "--name", "-n", help="Name of the target"),
+    config_path: str = typer.Option(".jasminetool/config.yaml", "--path", "-p", help="Path to the config file"),
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive select target by name"),
+):
+    """
+    Remove the target server word dir
+    """
+    config = _init_config(config_path)
+    server, name = _common_check_and_return_server(config, name, interactive)
+    server.remove()
 
 @target_app.command(name="sync")
 def sync_target(

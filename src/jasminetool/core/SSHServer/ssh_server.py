@@ -63,10 +63,14 @@ class SSHServer(Server):
 
     def _remove(self):
         # Example: delete temp folder
-        logger.info(f"[{self.config.name}] Removing work dir: {self.server_config.work_dir}")
+        logger.warning(f"[{self.config.name}] Removing work dir: {self.server_config.work_dir}")
         # It is a dangerous operation, so we need to confirm
         confirm = Confirm.ask(f"Are you sure you want to remove [bold red] [{self.config.name}]:{self.server_config.work_dir}[/bold red]?")
         if not confirm:
             logger.info(f"[{self.config.name}] Skipping work dir removal")
             return
-        self.connection.run(f"rm -rf {self.server_config.work_dir}")
+        result = self.connection.run(f"rm -rf {self.server_config.work_dir}", pty=True)
+        if result.ok:
+            logger.info(f"[{self.config.name}] Work dir removed successfully")
+        else:
+            logger.error(f"[{self.config.name}] Failed to remove work dir")
