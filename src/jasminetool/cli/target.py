@@ -140,7 +140,8 @@ def sync_target(
     config = _init_config(config_path)
     _check_name(name, config)
     server = load_server(name, config)
-    server.sync()
+    if not server.sync():
+        raise ValueError("Sync failed, please check the source dir andtarget server")
 
 
 @target_app.command(name="start")
