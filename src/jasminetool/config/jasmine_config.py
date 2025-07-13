@@ -73,6 +73,7 @@ class JasmineConfig:
     server_config_list: List[Union[RemoteSSHConfig, RemoteK8sConfig]] = field(default_factory=lambda: [_init_example_remote_ssh_config(), _init_example_remote_k8s_config()])
     wandb_key: Optional[str] = field(default_factory=lambda: os.getenv("WANDB_API_KEY"))
     wandb_project: Optional[str] = field(default_factory=lambda: os.path.basename(os.getcwd()))
+    env_vars: Optional[dict[str, str]] = field(default_factory=lambda: {})
 
     def load_server_config(self, name: str) -> Union[RemoteSSHConfig, RemoteK8sConfig]:
         for server in self.server_config_list:

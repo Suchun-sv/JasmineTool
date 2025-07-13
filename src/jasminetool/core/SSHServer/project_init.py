@@ -74,8 +74,9 @@ class ProjectInitializer:
 
         if result.ok and not force:
             logger.info(f"result: {result}")
-            logger.warning(f"GitHub repo already exists at {self.server_config.work_dir}")
-            raise ValueError(f"GitHub repo already exists at {self.server_config.work_dir}, use --force to override")
+            logger.warning(f"GitHub repo already exists at {self.server_config.work_dir}, use --force to override")
+            # raise ValueError(f"GitHub repo already exists at {self.server_config.work_dir}, use --force to override")
+            return True
 
         if result.ok and force:
             logger.warning(f"force remove {self.server_config.work_dir}")

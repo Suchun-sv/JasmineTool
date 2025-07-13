@@ -13,8 +13,13 @@ class ProjectStarter:
         self.conn = connection
         self.console = Console()
 
-    def _with_uv_xcmd_env(self, cmd: str) -> str:
-        return f'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.x-cmd.root/bin:$PATH" && {cmd}'
+    def _with_env(self, cmd: str) -> str:
+        env_cmd = ""
+        if hasattr(self.global_config, "env_vars") and self.global_config.env_vars:
+            env_vars = self.global_config.env_vars
+            for key, value in env_vars.items():
+                env_cmd += f'export {key}="{value}" && '
+        return f'{env_cmd}export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.x-cmd.root/bin:$PATH" && {cmd}'
 
     def _has_gpu(self) -> bool:
         result = self.conn.run("command -v nvidia-smi", warn=True, hide=True)
@@ -90,7 +95,7 @@ class ProjectStarter:
                 else:
                     full_cmd = f"{base_cmd}{self.server_config.command_runner} {wandb_cmd}"
 
-                final_cmd = self._with_uv_xcmd_env(full_cmd)
+                final_cmd = self._with_env(full_cmd)
                 self.conn.run(f'tmux send-keys -t {session_name} "{final_cmd}" C-m', warn=True, hide=True)
 
                 msg = f"✅ Started process {i+1} on GPU {gpu_id}" if has_gpu else f"✅ Started process {i+1} (CPU-only)"
