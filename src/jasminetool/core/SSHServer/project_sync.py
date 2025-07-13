@@ -55,7 +55,7 @@ class ProjectSync:
     def _check_dvc_clean(self) -> bool:
         res = subprocess.run(f"cd {self.work_dir} && uv run dvc status", shell=True, capture_output=True)
         logger.info(f"[{self.server.name}] 📍 DVC status:\n{res.stdout}")
-        if res.stdout.strip() != b'Data and pipelines are up to date.':
+        if res.stdout.strip() not in [b'Data and pipelines are up to date.', b'There are no data or pipelines tracked in this project yet.\nSee <https://dvc.org/doc/start> to get started!']:
             logger.error(f"[{self.server.name}] ✗ DVC repo not clean:\n{res.stdout}")
             return False
         logger.info(f"[{self.server.name}] ✓ DVC repo is clean")

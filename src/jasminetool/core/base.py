@@ -41,8 +41,8 @@ class Server(ABC):
     def _check_path(self, path: str) -> bool:
         return False
     
-    def sync(self):
-        self._sync()
+    def sync(self) -> bool:
+        return self._sync()
     
     def start(self, **kwargs):
         self._start(**kwargs)

@@ -59,8 +59,8 @@ class SSHServer(Server):
             logger.error(f"[{self.config.name}] Failed to check path: {e}")
             return False
 
-    def _sync(self):
-        ProjectSync(self.connection, self.server_config, self.gloabl_config).run()
+    def _sync(self) -> bool:
+        return ProjectSync(self.connection, self.server_config, self.gloabl_config).run()
 
     def _start(self, sweep_id: str, gpu_config: str, num_processes: int, wandb_key: str):
         ProjectStarter(self.gloabl_config, self.connection, self.server_config).run(
