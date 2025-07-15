@@ -9,7 +9,10 @@ class ProjectInitializer:
         self.conn = connection
     
     def _with_uv_xcmd_env(self, cmd: str) -> str:
-        return f'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.x-cmd.root/bin:$PATH" && {cmd}'
+        base_cmd = f'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.x-cmd.root/bin:$PATH" && {cmd} '
+        for env_var, env_value in self.global_config.env_vars.items():
+            base_cmd = f'export {env_var}={env_value} && {base_cmd}'
+        return base_cmd
 
 
     def run(self, force: bool = False):
@@ -28,8 +31,21 @@ class ProjectInitializer:
             return False
 
         # Step 4: Setup Python environment
-        if not self._setup_environment():
-            return False
+        # Check if init.sh exists in work_dir
+        init_script_path = f"{self.server_config.work_dir}/install.sh"
+        check_result = self.conn.run(f"test -f {init_script_path}", warn=True)
+        
+        if check_result.ok:
+            logger.info(f"[{self.server_config.name}] 🔧 Running install.sh...")
+            full_command = f"bash -c '{self._with_uv_xcmd_env('cd')} {self.server_config.work_dir} && chmod +x install.sh && ./install.sh'"
+            result = self.conn.run(full_command, pty=True)
+            if not result.ok:
+                logger.error("✗ Failed to run install.sh")
+                return False
+        else:
+            logger.debug(f"[{self.server_config.name}] install.sh not found in {self.server_config.work_dir}, skipping...")
+            if not self._setup_environment():
+                return False
 
         logger.info(f"[{self.server_config.name}] 🎉 Initialization complete!")
         return True
