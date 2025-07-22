@@ -62,7 +62,6 @@ class RemoteK8sConfig(BaseConfig):
     ])
 
 
-
 MODE_CLASS_MAP: dict[str, Type[BaseConfig]] = {
     "remote_ssh": RemoteSSHConfig,
     "remote_k8s": RemoteK8sConfig

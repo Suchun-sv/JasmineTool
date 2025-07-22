@@ -7,15 +7,28 @@ class K8sServer(Server):
         self.global_config = global_config
 
     def _init(self):
+        """
+        similar to SSH server, will clone the repo and install the dependencies
+        also will install the env vars to the k8s secret
+        """
         pass
 
     def _test(self):
+        """
+        will do nothing for now
+        """
         pass
 
     def _sync(self):
+        """
+        will do nothing for now
+        """
         pass
 
     def _start(self):
+        """
+        core function, will assemble the commands and submit to the job
+        """
         pass
 
     def _install(self):
