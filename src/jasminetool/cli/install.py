@@ -15,8 +15,9 @@ install_app = typer.Typer()
 @install_app.command("all")
 def install_target(
     config_path: str = typer.Option(".jasminetool/config.yaml", "--path", "-p", help="Path to the config file"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force install"),
 ):
     typer.echo("Installing target...")
     config = load_config(config_path)
     targets = get_server_name_list(config)
-    install_vscode_tasks(config, targets)
+    install_vscode_tasks(config, targets, force)

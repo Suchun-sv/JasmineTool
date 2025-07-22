@@ -1,0 +1,36 @@
+servers:
+- name: server_1
+  mode: remote_ssh
+  github_url: git@github.com:Suchun-sv/jasminetool.git
+  work_dir: /YOUR_WORK_DIR/VectorTranslation/
+  user_name: YOUR_USER_NAME
+  server_ip: YOUR_SERVER_IP
+  command_runner: uv run
+  num_processes: 4
+  gpu_config: '0'
+  server_port: null
+  proxy_user: null
+  proxy_ip: null
+  proxy_port: 22
+- name: hp
+  mode: remote_ssh
+  github_url: git@github.com:Suchun-sv/VectorTranslation.git
+  work_dir: /home/suchun/github/VectorTranslationJasminetool/
+  dvc_cache: /mnt/work/work/.cache/dvc-cache/VectorTranslation
+  dvc_remote: s3://dvc-local-cache/VectorTranslation/
+  user_name: suchun
+  server_ip: ubuntu
+  command_runner: uv run
+  num_processes: 4
+  gpu_config: '0'
+  server_port: null
+  proxy_user: null
+  proxy_ip: null
+  proxy_port: 22
+src_dir: LOCAL_WORK_DIR
+sweep_file_path: ./.jasminetool/sweep_config.log
+wandb_key: YOUR_WANDB_KEY
+wandb_project: WANDB_PROJECT
+env_vars:
+  MISTRAL_API_KEY: XXX
+  HF_TOKEN: XXX

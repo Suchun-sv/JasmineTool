@@ -36,7 +36,7 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/yourusername/JasmineTool"
+"Homepage" = "https://github.com/Suchsv-sv/JasmineTool"
 "Bug Reports" = "https://github.com/yourusername/JasmineTool/issues"
 "Source" = "https://github.com/yourusername/JasmineTool"
 
