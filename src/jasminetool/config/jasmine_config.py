@@ -32,8 +32,36 @@ class RemoteSSHConfig(BaseConfig):
 
 @dataclass
 class RemoteK8sConfig(BaseConfig):
-    k8s_namespace: str
-    k8s_pod_name: str
+    namespace: str
+    k8s_user: str
+    common_config: dict[str, str] = field(default_factory=lambda: {
+        "QUEUE_NAME": "YOUR_QUEUE_NAME",
+        "PRIORITY_CLASS": "YOUR_PRIORITY_CLASS",
+        "IMAGE_NAME": "nvcr.io/nvidia/pytorch:23.12-py3",
+        "WORKSPACE_PVC": "YOUR_WORKSPACE_PVC",
+        "WORKSPACE_MOUNT_PATH": "/root/",
+        "USER": "YOUR_USER_NAME"
+    })
+    gpu_candidates: dict[str, str] = field(default_factory=lambda: {
+        "h200": "NVIDIA-H200", 
+        "h100": "NVIDIA-H100-80GB-HBM3", 
+        "a100-80g": "NVIDIA-A100-SXM4-80GB", 
+        "a100-40g": "NVIDIA-A100-SXM4-40GB-MIG-3g.20gb"
+    })
+    submit_job_config: List[dict[str, str]] = field(default_factory=lambda: [
+        {
+            "gpu_selector": "h100",
+            "GPU_NUM": 1,
+        },
+        {
+            "gpu_selector": "a100-80g",
+            "GPU_NUM": 2,
+            "CPU_NUM": 24,
+            "MEMORY_NUM": 160,
+        }
+    ])
+
+
 
 MODE_CLASS_MAP: dict[str, Type[BaseConfig]] = {
     "remote_ssh": RemoteSSHConfig,
