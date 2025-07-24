@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Type, Union
+from typing import Optional, List, Type, Union, Any
 from dacite import from_dict
 import yaml
 import os
@@ -32,8 +32,17 @@ class RemoteSSHConfig(BaseConfig):
 
 @dataclass
 class RemoteK8sConfig(BaseConfig):
-    namespace: str
-    k8s_user: str
+    user_name: str
+    server_ip: str
+
+    upload_script_path: str = field(default_factory=lambda: "/root/.scripts/")
+    work_script_path: str = field(default_factory=lambda: "/workspace/")
+
+    server_port: Optional[int] = None
+    proxy_user: Optional[str] = None
+    proxy_ip: Optional[str] = None
+    proxy_port: Optional[int] = 22
+
     common_config: dict[str, str] = field(default_factory=lambda: {
         "QUEUE_NAME": "YOUR_QUEUE_NAME",
         "PRIORITY_CLASS": "YOUR_PRIORITY_CLASS",
@@ -48,7 +57,7 @@ class RemoteK8sConfig(BaseConfig):
         "a100-80g": "NVIDIA-A100-SXM4-80GB", 
         "a100-40g": "NVIDIA-A100-SXM4-40GB-MIG-3g.20gb"
     })
-    submit_job_config: List[dict[str, str]] = field(default_factory=lambda: [
+    submit_job_config: List[Any] = field(default_factory=lambda: [
         {
             "gpu_selector": "h100",
             "GPU_NUM": 1,
