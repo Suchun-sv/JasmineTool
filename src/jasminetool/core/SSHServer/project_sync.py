@@ -67,11 +67,6 @@ class ProjectSync:
         return True
 
     def _check_git_clean(self) -> bool:
-        # res = self.conn.run(self._with_env(f"cd {self.src_dir} && git status --porcelain"), hide=True, warn=True)
-        # if res.stdout.strip():
-        #     logger.error(f"[{self.server.name}] ✗ Source repo not clean:\n{res.stdout}")
-        #     return False
-        # logger.info(f"[{self.server.name}] ✓ Source repo is clean")
         res = subprocess.run(f"cd {self.src_dir} && git status --porcelain", shell=True, capture_output=True)
         if res.stdout.strip():
             logger.error(f"[{self.server.name}] ✗ Source repo not clean:\n{res.stdout}")

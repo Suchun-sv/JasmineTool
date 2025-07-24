@@ -3,7 +3,7 @@ import typer
 from jasminetool.config import JasmineConfig, load_config
 from jasminetool.core import load_server
 from typing import List, Union, Optional, Tuple
-from jasminetool.core import SSHServer
+from jasminetool.core import SSHServer, K8sServer
 import select
 import sys
 
@@ -194,6 +194,11 @@ def start_target(
                     rich.print(f"[red]Invalid input. Expected an integer.[/red] Using default number of processes: [yellow]{server.server_config.num_processes}[/yellow]")
                     num_processes = server.server_config.num_processes
         
+        server.start(sweep_id=sweep_id, gpu_config=gpu_config, num_processes=num_processes, wandb_key=wandb_key)
+    elif server.config.mode == "remote_k8s" and isinstance(server, K8sServer):
+        gpu_config = "0"
+        num_processes = server.server_config.num_processes
+        wandb_key = server.global_config.wandb_key
         server.start(sweep_id=sweep_id, gpu_config=gpu_config, num_processes=num_processes, wandb_key=wandb_key)
     else:
         raise ValueError(f"Unsupported server Mode: {server.config.mode}")

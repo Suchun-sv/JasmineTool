@@ -37,6 +37,7 @@ class RemoteK8sConfig(BaseConfig):
 
     upload_script_path: str = field(default_factory=lambda: "/root/.scripts/")
     work_script_path: str = field(default_factory=lambda: "/workspace/")
+    num_processes: int = field(default_factory=lambda: 4)
 
     server_port: Optional[int] = None
     proxy_user: Optional[str] = None

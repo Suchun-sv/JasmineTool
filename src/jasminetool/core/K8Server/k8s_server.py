@@ -1,6 +1,7 @@
 from ..base import Server
 from jasminetool.config import RemoteK8sConfig, JasmineConfig
 from .project_init import ProjectInitializer
+from .project_sync_and_start import ProjectSyncAndStart
 from .utils import create_connection
 from pathlib import Path
 import hashlib
@@ -9,6 +10,8 @@ import yaml
 import re
 import os
 
+from jasminetool.core.K8Server import project_sync_and_start
+
 class K8sServer(Server):
     def __init__(self, global_config: JasmineConfig, server_config: RemoteK8sConfig):
         super().__init__(server_config)
@@ -16,15 +19,6 @@ class K8sServer(Server):
         self.server_config = server_config
         self.conn = create_connection(server_config)
         self.conn.run("echo 'Connection successful'")
-
-        self.command_dict = {
-            "init": "",
-            "test": "",
-            "sync": "",
-            "start": "",
-            "install": "",
-            "remove": "",
-        }
     
     def _with_env_vars(self, command_str: str) -> str:
         """
@@ -45,7 +39,9 @@ class K8sServer(Server):
         if not hook_file_path.exists():
             return ""
         with open(hook_file_path, "r") as f:
-            return f.read()
+            hook_str = f.read()
+        return hook_str if len(hook_str) > 0 else ""
+
     
     def _upload_script_or_yaml(self, script_str: str, pre_fix: str = "", type_str: str = "sh"):
         """
@@ -140,18 +136,28 @@ class K8sServer(Server):
             logger.error(f"❌ File sync failed: {e}")
             return False
 
-    def _start(self):
+    def _start(self, sweep_id: str, gpu_config: str, num_processes: int, wandb_key: str):
         """
         Start the main job on Kubernetes cluster
         """
-        try:
-            logger.info("🚀 Starting K8s job...")
-            # TODO: Implement job start logic
-            logger.info("✅ K8s job started successfully")
-            return True
-        except Exception as e:
-            logger.error(f"❌ Failed to start K8s job: {e}")
-            return False
+        project_sync_and_start = ProjectSyncAndStart(self.global_config, self.server_config)
+        script_str = "#!/bin/bash"
+        script_str += self._parse_hooks("2.pre_sync.sh")
+        script_str += project_sync_and_start.sync()
+        script_str += self._parse_hooks("3.post_sync.sh")
+        script_str += self._parse_hooks("4.pre_start.sh")
+        script_str += project_sync_and_start.start(sweep_id=sweep_id, num_processes=num_processes)
+        script_str += self._parse_hooks("5.post_start.sh")
+        script_name = self._upload_script_or_yaml(script_str, pre_fix="sync-start", type_str="sh")
+        host_script_path = os.path.join(self.server_config.work_script_path, script_name)
+
+        for per_submit_job_config in self.server_config.submit_job_config:
+            gpu_selector = per_submit_job_config["gpu_selector"]
+            gpu_num = per_submit_job_config["GPU_NUM"]
+            config_yaml_str = self._assemble_config_yaml(gpu=gpu_selector, script_path=host_script_path, config_dict=per_submit_job_config)
+            config_yaml_name = self._upload_script_or_yaml(config_yaml_str, pre_fix=f"start-k8s-job", type_str="yaml")
+            config_yaml_path = os.path.join(self.server_config.upload_script_path, config_yaml_name)
+            self._submit_job(config_yaml_path=config_yaml_path)
 
     def _install(self):
         """
@@ -208,9 +214,10 @@ class K8sServer(Server):
         for key, value in env_vars.items():
             if key in default_config_dict:
                 env_vars[key] = default_config_dict[key]
-                logger.debug(f"The variable [{key}] is found in the default config dict, will be replaced with [{default_config_dict[key]}]")
+                # logger.debug(f"The variable [{key}] is found in the default config dict, will be replaced with [{default_config_dict[key]}]")
             else:
-                logger.debug(f"The variable [{key}] is not found in the default config dict, will use its default value [{value}]")
+                # logger.debug(f"The variable [{key}] is not found in the default config dict, will use its default value [{value}]")
+                pass
         
         env_vars["TASK_SCRIPT"] = script_path
 
@@ -244,95 +251,8 @@ class K8sServer(Server):
         # note in the template yaml_str, the variables are like ${VAR_NAME:-default_value} or ${VAR_NAME}
         """
         for key, value in env_vars.items():
+            if key in ["GPU_NUM", "CPU_NUM", "MEMORY_NUM"] and isinstance(value, int):
+                value = str(value)
             pattern = r'\$\{' + re.escape(key) + r':-[^}]*\}'
             template_str = re.sub(pattern, value, template_str)
         return template_str
-
-# class K8sServer(Server):
-#     def __init__(self, global_config: JasmineConfig, server_config: RemoteK8sConfig):
-#         super().__init__(server_config)
-#         self.global_config = global_config
-#         self.server_config = server_config
-#         # try:
-#         #     self.conn = create_connection(server_config)
-#         #     self.conn.run("echo 'Connection successful'")
-#         # except Exception as e:
-#         #     logger.error(f"Failed to create connection: {e}")
-#         #     raise e
-#         self.conn = create_connection(server_config)
-#         self.conn.run("echo 'Connection successful'")
-
-#         self.command_dict = {
-#             "init": "",
-#             "test": "",
-#             "sync": "",
-#             "start": "",
-#             "install": "",
-#             "remove": "",
-#         }
-    
-#     @staticmethod
-#     def parse_custom_variables(text: str) -> Dict[str, str]:
-#         """
-#         Parse custom variable syntax like ${Variable_name:-default_value}
-        
-#         Args:
-#             text: String containing custom variables
-            
-#         Returns:
-#             Dictionary mapping variable names to their default values
-#         """
-#         # Pattern to match ${Variable_name:-default_value}
-#         pattern = r'\$\{([^:]+):-([^}]+)\}'
-        
-#         variables = {}
-#         matches = re.findall(pattern, text)
-        
-#         for match in matches:
-#             variable_name = match[0]
-#             default_value = match[1]
-#             variables[variable_name] = default_value
-        
-#         return variables
-
-#     @staticmethod
-#     def extract_and_replace_variables(text: str, env_vars: Optional[Dict[str, str]] = None) -> Tuple[str, Dict[str, str]]:
-#         """
-#         Extract variables from text and replace them with actual values
-        
-#         Args:
-#             text: String containing custom variables
-#             env_vars: Dictionary of environment variables (optional)
-            
-#         Returns:
-#             Tuple of (replaced_text, extracted_variables)
-#         """
-#         if env_vars is None:
-#             env_vars = {}
-        
-#         # Extract variables
-#         variables = K8sServer.parse_custom_variables(text)
-        
-#         # Replace variables in text
-#         replaced_text = text
-#         for var_name, default_value in variables.items():
-#             # Use environment variable if available, otherwise use default
-#             actual_value = env_vars.get(var_name, default_value)
-#             pattern = r'\$\{' + re.escape(var_name) + r':-' + re.escape(default_value) + r'\}'
-#             replaced_text = re.sub(pattern, actual_value, replaced_text)
-        
-#         return replaced_text, variables
-
-#     @staticmethod
-#     def parse_k8s_job_template(job_template: str, env_vars: Optional[Dict[str, str]] = None) -> str:
-#         """
-#         Parse Kubernetes job template and replace custom variables
-        
-#         Args:
-#             job_template: Kubernetes job template as string
-#             env_vars: Environment variables dictionary
-            
-#         Returns:
-#             Processed job template with variables replaced
-#         """
-#         return K8sServer.extract_and_replace_variables(job_template, env_vars)[0]
