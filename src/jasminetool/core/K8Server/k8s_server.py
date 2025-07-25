@@ -153,7 +153,10 @@ class K8sServer(Server):
 
         for per_submit_job_config in self.server_config.submit_job_config:
             gpu_selector = per_submit_job_config["gpu_selector"]
-            gpu_num = per_submit_job_config["GPU_NUM"]
+            if gpu_selector == "cpu":
+                gpu_num = 0
+            else:
+                gpu_num = per_submit_job_config["GPU_NUM"]
             config_yaml_str = self._assemble_config_yaml(gpu=gpu_selector, script_path=host_script_path, config_dict=per_submit_job_config)
             config_yaml_name = self._upload_script_or_yaml(config_yaml_str, pre_fix=f"start-k8s-job", type_str="yaml")
             config_yaml_path = os.path.join(self.server_config.upload_script_path, config_yaml_name)

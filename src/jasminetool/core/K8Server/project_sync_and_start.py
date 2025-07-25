@@ -35,10 +35,10 @@ class ProjectSyncAndStart:
         # sync the git branch one the target branch, writing bash script
         sync_script = f"""
 echo "Syncing git branch {branch}..." && \
-cd {self.src_dir} && \
+cd {self.server_config.work_dir} && \
 {self._with_env_vars("git fetch --all && ")}
 {self._with_env_vars(f"git checkout {branch} || git checkout -b {branch} origin/{branch} && ")}
-{self._with_env_vars("git reset --hard origin/{branch} && ")}
+{self._with_env_vars(f"git reset --hard origin/{branch} && ")}
 echo "✓ Git branch {branch} synced"
 """
         return sync_script
@@ -81,10 +81,10 @@ echo "🔍 Detecting GPU count..."
 get_gpu_count() {{
     if command -v nvidia-smi &> /dev/null; then
         gpu_count=$(nvidia-smi --list-gpus | wc -l)
-        echo "Found $gpu_count GPU(s)"
+        echo "Found $gpu_count GPU(s)" >&2
         echo $gpu_count
     else
-        echo "No nvidia-smi found, assuming CPU-only mode"
+        echo "No nvidia-smi found, assuming CPU-only mode" >&2
         echo 0
     fi
 }}
@@ -113,7 +113,7 @@ echo "  - Total processes: $((gpu_count * {num_processes}))"
 # Calculate total processes
 total_processes=$((gpu_count * {num_processes}))
 
-if [ $gpu_count -eq 0 ]; then
+if [ "$gpu_count" -eq 0 ]; then
     echo "🖥️  CPU-only mode detected"
     # Start multiple processes for CPU mode
     echo "🚀 Starting {num_processes} processes in CPU mode..."
